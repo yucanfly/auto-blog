@@ -1,0 +1,80 @@
+name: Daily Blog Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: Optional topic override for a manual run
+        required: false
+        type: string
+      dry_run:
+        description: Generate and validate without uploading to OSS
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    - cron: "10 1 * * *"
+
+concurrency:
+  group: daily-blog-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TZ: Asia/Shanghai
+      BLOG_AI_BASE_URL: https://yunwu.ai
+      BLOG_TEXT_MODEL: gemini-3-flash-preview
+      BLOG_IMAGE_MODEL: gemini-3.1-flash-image-preview
+      BLOG_TIMEZONE: Asia/Shanghai
+      BLOG_OSS_ENDPOINT: oss-ap-southeast-1.aliyuncs.com
+      BLOG_OSS_BUCKET: lgi-static
+      BLOG_OSS_PREFIX: blog
+      BLOG_AI_API_KEY: ${{ secrets.BLOG_AI_API_KEY }}
+      BLOG_OSS_ACCESS_KEY_ID: ${{ secrets.BLOG_OSS_ACCESS_KEY_ID }}
+      BLOG_OSS_ACCESS_KEY_SECRET: ${{ secrets.BLOG_OSS_ACCESS_KEY_SECRET }}
+      BLOG_REVALIDATE_SECRET: ${{ secrets.BLOG_REVALIDATE_SECRET }}
+      SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate preview only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        env:
+          BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
+        run: |
+          if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
+            pnpm publish:dry-run --topic "$BLOG_TOPIC_OVERRIDE"
+          else
+            pnpm publish:dry-run
+          fi
+
+      - name: Publish blog to OSS
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        env:
+          BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
+        run: |
+          if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
+            pnpm publish --topic "$BLOG_TOPIC_OVERRIDE"
+          else
+            pnpm publish
+          fi
