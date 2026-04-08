@@ -6,13 +6,13 @@ This directory contains the standalone automation logic for generating and publi
 
 ```bash
 pnpm install
-pnpm publish:dry-run
+pnpm blog:publish:dry-run
 ```
 
 To publish for real:
 
 ```bash
-pnpm publish
+pnpm blog:publish
 ```
 
 ## Required environment variables

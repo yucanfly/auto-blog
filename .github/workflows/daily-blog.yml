@@ -63,9 +63,9 @@ jobs:
           BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
         run: |
           if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
-            pnpm publish:dry-run --topic "$BLOG_TOPIC_OVERRIDE"
+            pnpm blog:publish:dry-run --topic "$BLOG_TOPIC_OVERRIDE"
           else
-            pnpm publish:dry-run
+            pnpm blog:publish:dry-run
           fi
 
       - name: Publish blog to OSS
@@ -74,7 +74,7 @@ jobs:
           BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
         run: |
           if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
-            pnpm publish --topic "$BLOG_TOPIC_OVERRIDE"
+            pnpm blog:publish --topic "$BLOG_TOPIC_OVERRIDE"
           else
-            pnpm publish
+            pnpm blog:publish
           fi

@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "publish": "node ./src/publish-generated-blog.mjs",
-    "publish:dry-run": "node ./src/publish-generated-blog.mjs --dry-run",
+    "blog:publish": "node ./src/publish-generated-blog.mjs",
+    "blog:publish:dry-run": "node ./src/publish-generated-blog.mjs --dry-run",
     "check": "node --check ./src/publish-generated-blog.mjs"
   },
   "dependencies": {
