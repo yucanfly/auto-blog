@@ -4,7 +4,7 @@ This directory contains the standalone automation logic for generating and publi
 
 For full architecture and flow documentation, see:
 
-- `docs/BLOG_AUTOMATION_ARCHITECTURE.md`
+- [docs/BLOG_AUTOMATION_ARCHITECTURE.md](/Users/yu/工作代码/collabGrow-web/automation/blog-publisher/docs/BLOG_AUTOMATION_ARCHITECTURE.md)
 
 ## Local test
 
@@ -48,6 +48,7 @@ pnpm blog:publish
 - `BLOG_TREND_LANG`
 - `BLOG_TREND_COUNTRY`
 - `BLOG_DINGTALK_WEBHOOK`
+- `BLOG_DINGTALK_SECRET`
 
 ## Workflow
 
@@ -125,24 +126,7 @@ The publisher can send a Chinese markdown summary to a DingTalk robot webhook af
 Recommended production setting:
 
 - `BLOG_DINGTALK_WEBHOOK=<dingtalk webhook url>`
-
-## GitHub Actions setup
-
-Configure these secrets in the `auto-blog` repository:
-
-- `BLOG_AI_API_KEY`
-- `BLOG_OSS_ACCESS_KEY_ID`
-- `BLOG_OSS_ACCESS_KEY_SECRET`
-- `BLOG_REVALIDATE_SECRET`
-- `BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON`
-- `BLOG_CURRENTS_API_KEY`
-- `BLOG_GNEWS_API_KEY`
-- `BLOG_DINGTALK_WEBHOOK`
-
-Configure these variables:
-
-- `SITE_BASE_URL=https://collabgrow.lgi365.com`
-- `BLOG_SEARCH_CONSOLE_PROPERTY=https://collabgrow.lgi365.com`
+- `BLOG_DINGTALK_SECRET=<dingtalk robot signing secret>`
 
 The script keeps local state in:
 

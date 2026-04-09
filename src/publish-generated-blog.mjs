@@ -399,7 +399,25 @@ function buildDingTalkMarkdown({
   return lines.join("\n");
 }
 
-async function sendDingTalkNotification({ webhook, title, markdownText }) {
+function buildSignedDingTalkWebhook(webhook, secret) {
+  const rawWebhook = String(webhook || "").trim();
+  if (!rawWebhook) return "";
+
+  if (!secret) return rawWebhook;
+
+  const timestamp = Date.now();
+  const stringToSign = `${timestamp}\n${secret}`;
+  const sign = crypto
+    .createHmac("sha256", secret)
+    .update(stringToSign)
+    .digest("base64");
+  const url = new URL(rawWebhook);
+  url.searchParams.set("timestamp", String(timestamp));
+  url.searchParams.set("sign", sign);
+  return url.toString();
+}
+
+async function sendDingTalkNotification({ webhook, secret, title, markdownText }) {
   if (!webhook) {
     logStep("DINGTALK", "Webhook not configured, skipping notification");
     return {
@@ -408,10 +426,12 @@ async function sendDingTalkNotification({ webhook, title, markdownText }) {
     };
   }
 
+  const signedWebhook = buildSignedDingTalkWebhook(webhook, secret);
   logStep("DINGTALK", "Sending DingTalk notification", {
     title,
+    signed: Boolean(secret),
   });
-  const response = await fetch(webhook, {
+  const response = await fetch(signedWebhook, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -432,12 +452,26 @@ async function sendDingTalkNotification({ webhook, title, markdownText }) {
     );
   }
 
+  let parsed;
+  try {
+    parsed = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed && Number(parsed.errcode || 0) !== 0) {
+    throw new Error(
+      `DingTalk webhook rejected the message (errcode: ${parsed.errcode}, errmsg: ${parsed.errmsg || "unknown error"})`,
+    );
+  }
+
   logStep("DINGTALK", "Notification delivered", {
     response: responseText.slice(0, 200),
   });
   return {
     ok: true,
     responseText,
+    signedWebhook,
   };
 }
 
@@ -3003,6 +3037,7 @@ async function main() {
     failedStepLabel: "",
   };
   const dingTalkWebhook = getEnv("BLOG_DINGTALK_WEBHOOK", DEFAULT_DINGTALK_WEBHOOK);
+  const dingTalkSecret = getEnv("BLOG_DINGTALK_SECRET");
   let notificationStatus = args.dryRun ? "dry_run" : "failed";
 
   stepTracker.start("BOOT");
@@ -3058,6 +3093,7 @@ async function main() {
       hasCurrentsApiKey: Boolean(getEnv("BLOG_CURRENTS_API_KEY")),
       hasGnewsApiKey: Boolean(getEnv("BLOG_GNEWS_API_KEY")),
       hasDingTalkWebhook: Boolean(dingTalkWebhook),
+      hasDingTalkSecret: Boolean(dingTalkSecret),
     });
 
     const publicOssBaseUrl = buildPublicOssBaseUrl(ossBucket, ossEndpoint);
@@ -3431,6 +3467,7 @@ async function main() {
     try {
       await sendDingTalkNotification({
         webhook: dingTalkWebhook,
+        secret: dingTalkSecret,
         title: `${titlePrefix}${titleSuffix}${titleSlug}`,
         markdownText,
       });
