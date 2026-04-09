@@ -21,6 +21,61 @@ const DEFAULT_SEARCH_CONSOLE_SCOPE = "https://www.googleapis.com/auth/webmasters
 const DEFAULT_SEARCH_CONSOLE_LOOKBACK_DAYS = 90;
 const DEFAULT_SEARCH_CONSOLE_MIN_IMPRESSIONS = 5;
 const DEFAULT_SEARCH_CONSOLE_MIN_TOKENS = 2;
+const DEFAULT_TREND_LOOKBACK_HOURS = 72;
+const DEFAULT_TREND_LANG = "en";
+const DEFAULT_TREND_COUNTRY = "us";
+const DEFAULT_DINGTALK_WEBHOOK = "";
+
+const NOTIFICATION_STEP_ORDER = [
+  "BOOT",
+  "TOPIC_SELECTION",
+  "AI_TEXT",
+  "AI_IMAGE",
+  "OSS_UPLOAD",
+  "MANIFEST_UPDATE",
+  "REVALIDATE",
+  "VERIFY",
+];
+
+const NOTIFICATION_STEP_LABELS = {
+  BOOT: "启动初始化",
+  TOPIC_SELECTION: "选题生成",
+  AI_TEXT: "正文生成",
+  AI_IMAGE: "主图生成",
+  OSS_UPLOAD: "OSS 上传",
+  MANIFEST_UPDATE: "Manifest 更新",
+  REVALIDATE: "网站刷新",
+  VERIFY: "上线校验",
+};
+
+const LAYER_LABELS_ZH = {
+  core_editorial: "核心专题内容",
+  tool_problem: "工具问题内容",
+  controlled_programmatic: "程序化内容",
+  trend_linked: "趋势关联内容",
+};
+
+const PRODUCT_LABELS_ZH = {
+  deal_hunter: "Deal Hunter",
+  email_decoder: "Email Decoder",
+  brand_analyze: "Brand Analyze",
+};
+
+const SOURCE_LABELS_ZH = {
+  library: "主题库",
+  topic_library: "主题库",
+  search_console: "Search Console",
+  trend_signal: "趋势信号",
+  programmatic_seed: "程序化种子",
+  forced_topic: "手动指定主题",
+};
+
+const STATUS_ICONS = {
+  success: "✅",
+  failed: "❌",
+  skipped: "⏭️",
+  running: "🟡",
+};
 
 const LAYER_DEFINITIONS = {
   core_editorial: {
@@ -115,6 +170,275 @@ function logError(step, error, details) {
   const message = error instanceof Error ? error.message : String(error);
   const suffix = details ? ` ${JSON.stringify(details)}` : "";
   console.error(`[${getLogTimestamp()}] [${step}] ${message}${suffix}`);
+}
+
+function createStepTracker() {
+  const steps = Object.fromEntries(
+    NOTIFICATION_STEP_ORDER.map((step) => [
+      step,
+      {
+        status: "pending",
+        startedAt: 0,
+        finishedAt: 0,
+        durationMs: 0,
+        details: {},
+        error: "",
+      },
+    ]),
+  );
+
+  return {
+    start(step, details = {}) {
+      if (!steps[step]) return;
+      steps[step] = {
+        ...steps[step],
+        status: "running",
+        startedAt: Date.now(),
+        details: {
+          ...steps[step].details,
+          ...details,
+        },
+      };
+    },
+    success(step, details = {}) {
+      if (!steps[step]) return;
+      const finishedAt = Date.now();
+      const startedAt = steps[step].startedAt || finishedAt;
+      steps[step] = {
+        ...steps[step],
+        status: "success",
+        finishedAt,
+        durationMs: finishedAt - startedAt,
+        details: {
+          ...steps[step].details,
+          ...details,
+        },
+      };
+    },
+    fail(step, error, details = {}) {
+      if (!steps[step]) return;
+      const finishedAt = Date.now();
+      const startedAt = steps[step].startedAt || finishedAt;
+      steps[step] = {
+        ...steps[step],
+        status: "failed",
+        finishedAt,
+        durationMs: finishedAt - startedAt,
+        details: {
+          ...steps[step].details,
+          ...details,
+        },
+        error: error instanceof Error ? error.message : String(error || ""),
+      };
+    },
+    skip(step, details = {}) {
+      if (!steps[step]) return;
+      steps[step] = {
+        ...steps[step],
+        status: "skipped",
+        finishedAt: Date.now(),
+        details: {
+          ...steps[step].details,
+          ...details,
+        },
+      };
+    },
+    snapshot() {
+      return NOTIFICATION_STEP_ORDER.map((step) => ({
+        step,
+        label: NOTIFICATION_STEP_LABELS[step] || step,
+        ...steps[step],
+      }));
+    },
+  };
+}
+
+function formatExecutionDateTime(date, timeZone) {
+  try {
+    const formatter = new Intl.DateTimeFormat("zh-CN", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    return `${formatter.format(date)}（${timeZone}）`;
+  } catch {
+    return `${date.toISOString()}（${timeZone}）`;
+  }
+}
+
+function truncateText(value, maxLength = 240) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function formatDuration(durationMs) {
+  const safe = Number(durationMs || 0);
+  if (!safe) return "";
+  if (safe < 1000) return `${safe}ms`;
+  return `${(safe / 1000).toFixed(1)}s`;
+}
+
+function escapeMarkdownText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/>/g, "&gt;");
+}
+
+function buildStepLines(stepTracker) {
+  return stepTracker.snapshot().map((stepState) => {
+    const icon = STATUS_ICONS[stepState.status] || "•";
+    const duration = formatDuration(stepState.durationMs);
+    const suffix = duration ? `（${duration}）` : "";
+    const statusLabel =
+      stepState.status === "success"
+        ? "成功"
+        : stepState.status === "failed"
+          ? "失败"
+          : stepState.status === "skipped"
+            ? "已跳过"
+            : stepState.status === "running"
+              ? "进行中"
+              : "未执行";
+    return `- ${icon} ${stepState.label}：${statusLabel}${suffix}`;
+  });
+}
+
+function buildDingTalkMarkdown({
+  status,
+  args,
+  runState,
+  stepTracker,
+}) {
+  const isDryRun = Boolean(args.dryRun);
+  const isSuccess = status === "success";
+  const isDry = status === "dry_run";
+  const header = isSuccess
+    ? "## ✅ 发布成功"
+    : isDry
+      ? "## 🧪 演练完成（未正式发布）"
+      : "## ❌ 发布失败";
+
+  const modeLabel = isDryRun ? "Dry Run" : "正式发布";
+  const executionTime = formatExecutionDateTime(runState.startedAt || new Date(), runState.timeZone);
+  const sequenceNumber = runState.sequenceNumber ? `第 ${runState.sequenceNumber} 篇` : "未确定";
+  const titleLineLabel = isSuccess || isDry ? "文章标题" : "拟定标题";
+  const slugLineLabel = isSuccess || isDry ? "文章 Slug" : "拟定 Slug";
+  const selectedSource = SOURCE_LABELS_ZH[runState.sourceType] || runState.sourceType || "未确定";
+  const layerLabel = LAYER_LABELS_ZH[runState.layer] || runState.layer || "未确定";
+  const productLabel = PRODUCT_LABELS_ZH[runState.primaryProduct] || runState.primaryProduct || "未确定";
+  const lines = [
+    "# 🤖 Blog 自动发布通知",
+    "",
+    header,
+    `- 🕒 执行时间：${executionTime}`,
+    `- 🚀 执行模式：${modeLabel}`,
+    "- 🌍 执行环境：GitHub Actions",
+    `- 🧮 自动生成序号：${sequenceNumber}${isSuccess ? "" : isDry ? "（预估）" : "（预期）"}`,
+    "",
+    "## 📝 本次文章",
+    `- 📚 内容层级：${layerLabel}`,
+    `- 🧭 选题来源：${selectedSource}`,
+    `- 🎯 关联产品：${productLabel}`,
+  ];
+
+  if (runState.title) {
+    lines.push(`- 🏷️ ${titleLineLabel}：${escapeMarkdownText(runState.title)}`);
+  }
+  if (runState.slug) {
+    lines.push(`- 🔗 ${slugLineLabel}：${escapeMarkdownText(runState.slug)}`);
+  }
+
+  lines.push("", "## ⚙️ 执行步骤", ...buildStepLines(stepTracker));
+
+  if (isSuccess) {
+    lines.push(
+      "",
+      "## 📦 发布结果",
+      `- 🌐 文章页面：${runState.pageUrl || "未生成"}`,
+      `- 🗂️ Manifest 地址：${runState.manifestUrl || "未生成"}`,
+      `- 📄 文章 JSON：${runState.documentUrl || "未生成"}`,
+      `- 🖼️ 主图地址：${runState.imageUrl || "未生成"}`,
+    );
+  } else if (!isDry && (runState.manifestUrl || runState.documentUrl)) {
+    lines.push("", "## 🔎 排查线索");
+    if (runState.manifestUrl) {
+      lines.push(`- 🗂️ Manifest 地址：${runState.manifestUrl}`);
+    }
+    if (runState.documentUrl) {
+      lines.push(`- 📄 文章 JSON：${runState.documentUrl}`);
+    }
+  }
+
+  lines.push("", "## 📊 内容摘要");
+  if (runState.wordCount) lines.push(`- 🔢 文章字数：${runState.wordCount}`);
+  if (runState.tags?.length) lines.push(`- 🏷️ 标签：${escapeMarkdownText(runState.tags.join(", "))}`);
+  if (runState.ctaStyle) lines.push(`- 🪄 CTA 类型：${runState.ctaStyle}`);
+  lines.push(`- 🔍 Search Console 候选数：${runState.searchConsoleCandidateCount || 0}`);
+  lines.push(`- 📰 趋势候选数：${runState.trendCandidateCount || 0}`);
+
+  if (!isSuccess) {
+    lines.push("", "## 🚨 错误信息");
+    if (runState.failedStepLabel) {
+      lines.push(`- 📍 失败步骤：${runState.failedStepLabel}`);
+    }
+    if (runState.errorMessage) {
+      lines.push(`- 💬 错误原因：${escapeMarkdownText(truncateText(runState.errorMessage, 600))}`);
+    }
+  }
+
+  lines.push("", "> 本消息由 Blog 自动化流水线生成");
+  return lines.join("\n");
+}
+
+async function sendDingTalkNotification({ webhook, title, markdownText }) {
+  if (!webhook) {
+    logStep("DINGTALK", "Webhook not configured, skipping notification");
+    return {
+      ok: false,
+      skipped: true,
+    };
+  }
+
+  logStep("DINGTALK", "Sending DingTalk notification", {
+    title,
+  });
+  const response = await fetch(webhook, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      msgtype: "markdown",
+      markdown: {
+        title,
+        text: markdownText,
+      },
+    }),
+  });
+
+  const responseText = await response.text().catch(() => "");
+  if (!response.ok) {
+    throw new Error(
+      `DingTalk webhook failed (${response.status} ${response.statusText}): ${responseText.slice(0, 500)}`,
+    );
+  }
+
+  logStep("DINGTALK", "Notification delivered", {
+    response: responseText.slice(0, 200),
+  });
+  return {
+    ok: true,
+    responseText,
+  };
 }
 
 async function loadLocalEnvFiles() {
@@ -719,7 +1043,15 @@ async function loadJsonData(relativePath) {
 }
 
 async function loadV1ConfigBundle() {
-  const [topicLibrary, programmaticLibrary, queryRules, scoringRules, internalLinkingRules, toneRules] =
+  const [
+    topicLibrary,
+    programmaticLibrary,
+    queryRules,
+    scoringRules,
+    internalLinkingRules,
+    toneRules,
+    trendRules,
+  ] =
     await Promise.all([
       loadJsonData("topic-library.json"),
       loadJsonData("programmatic-library.json"),
@@ -727,6 +1059,7 @@ async function loadV1ConfigBundle() {
       loadJsonData("scoring-rules.json"),
       loadJsonData("internal-linking-rules.json"),
       loadJsonData("tone-rules.json"),
+      loadJsonData("trend-rules.json"),
     ]);
 
   return {
@@ -736,6 +1069,7 @@ async function loadV1ConfigBundle() {
     scoringRules,
     internalLinkingRules,
     toneRules,
+    trendRules,
   };
 }
 
@@ -1280,6 +1614,332 @@ async function getSearchConsoleContext(queryRules, siteBaseUrl) {
   };
 }
 
+function getIsoTimestampHoursAgo(hours) {
+  const date = new Date();
+  date.setUTCHours(date.getUTCHours() - Number(hours || DEFAULT_TREND_LOOKBACK_HOURS));
+  return date.toISOString();
+}
+
+function normalizeTrendText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+async function fetchTrendJson(url, options = {}) {
+  logStep("TREND", "Fetching trend source", {
+    url,
+  });
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `Trend source request failed (${response.status} ${response.statusText}): ${errorText.slice(0, 400)}`,
+    );
+  }
+  return response.json();
+}
+
+function normalizeCurrentsArticle(article, bucketId) {
+  return {
+    provider: "currents",
+    bucketId,
+    title: String(article.title || "").trim(),
+    description: String(article.description || "").trim(),
+    url: String(article.url || "").trim(),
+    sourceName: String(article.author || article.source || "Currents").trim(),
+    publishedAt: String(article.published || article.publishedAt || "").trim(),
+    language: String(article.language || "").trim().toLowerCase(),
+    categories: Array.isArray(article.category) ? article.category : [],
+  };
+}
+
+function normalizeGNewsArticle(article, bucketId) {
+  return {
+    provider: "gnews",
+    bucketId,
+    title: String(article.title || "").trim(),
+    description: String(article.description || "").trim(),
+    url: String(article.url || "").trim(),
+    sourceName: String(article.source?.name || article.source?.url || "GNews").trim(),
+    publishedAt: String(article.publishedAt || "").trim(),
+    language: String(article.language || "").trim().toLowerCase(),
+    categories: Array.isArray(article.keywords) ? article.keywords : [],
+  };
+}
+
+async function fetchCurrentsArticles({ apiKey, trendRules }) {
+  if (!apiKey) return [];
+  const sourceConfig = trendRules.sources?.currents || {};
+  const url = new URL(sourceConfig.baseUrl || "https://api.currentsapi.services/v1/search");
+  url.searchParams.set("keywords", sourceConfig.query || "");
+  url.searchParams.set("language", getEnv("BLOG_TREND_LANG", sourceConfig.language || DEFAULT_TREND_LANG));
+  url.searchParams.set(
+    "page_size",
+    String(
+      Math.min(
+        Number(sourceConfig.pageSize || trendRules.maxCandidates || 12),
+        Number(trendRules.maxCandidates || 12),
+      ),
+    ),
+  );
+
+  const payload = await fetchTrendJson(url.toString(), {
+    headers: {
+      Authorization: apiKey,
+    },
+  });
+
+  return (payload.news || []).map((article) => normalizeCurrentsArticle(article, "aggregate"));
+}
+
+async function fetchGNewsArticles({ apiKey, trendRules }) {
+  if (!apiKey) return [];
+  const sourceConfig = trendRules.sources?.gnews || {};
+  const url = new URL(sourceConfig.baseUrl || "https://gnews.io/api/v4/search");
+  url.searchParams.set("q", sourceConfig.query || "");
+  url.searchParams.set("lang", getEnv("BLOG_TREND_LANG", sourceConfig.language || DEFAULT_TREND_LANG));
+  url.searchParams.set(
+    "country",
+    getEnv("BLOG_TREND_COUNTRY", sourceConfig.country || DEFAULT_TREND_COUNTRY),
+  );
+  url.searchParams.set(
+    "max",
+    String(
+      Math.min(
+        Number(sourceConfig.max || trendRules.maxCandidates || 12),
+        Number(trendRules.maxCandidates || 12),
+      ),
+    ),
+  );
+  url.searchParams.set("in", sourceConfig.in || "title,description");
+  url.searchParams.set("apikey", apiKey);
+
+  const payload = await fetchTrendJson(url.toString());
+  return (payload.articles || []).map((article) => normalizeGNewsArticle(article, "aggregate"));
+}
+
+function dedupeTrendArticles(articles) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const article of articles || []) {
+    const key = `${normalizeTrendText(article.title)}|${normalizeTrendText(article.url)}`;
+    if (!article.title || !article.url || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(article);
+  }
+
+  return deduped;
+}
+
+function getTrendAgeHours(publishedAt) {
+  const timestamp = new Date(publishedAt || 0).getTime();
+  if (!timestamp) return 9999;
+  return Math.max(0, (Date.now() - timestamp) / (1000 * 60 * 60));
+}
+
+function mapTrendProduct(article, trendRules, queryRules) {
+  const text = `${article.title} ${article.description}`.toLowerCase();
+  const bucket = (trendRules.queryBuckets || []).find((item) => item.id === article.bucketId);
+
+  if (bucket?.primaryProduct) return bucket.primaryProduct;
+  return classifySearchConsoleProduct(text, queryRules);
+}
+
+function classifyTrendBucket(article) {
+  const text = normalizeTrendText(`${article.title} ${article.description}`);
+
+  if (
+    /(youtube|tiktok|instagram|reddit|twitter|\bx\b)/.test(text)
+    && /(policy|guideline|monetization|disclosure|ads|partnership)/.test(text)
+  ) {
+    return "platform-policy-and-disclosure";
+  }
+
+  if (/(email|outreach|inbox|reply|pitch)/.test(text)) {
+    return "email-outreach-and-inbox";
+  }
+
+  if (/(brand|campaign|partner)/.test(text) && /(legitimacy|reputation|review|risk|scam|fraud|safety)/.test(text)) {
+    return "brand-vetting-and-trust";
+  }
+
+  return "creator-sponsorship-risk";
+}
+
+function scoreTrendArticle(article, trendRules) {
+  const text = normalizeTrendText(`${article.title} ${article.description} ${(article.categories || []).join(" ")}`);
+  const creatorHits = countMatchingTerms(text, trendRules.creatorTerms || []);
+  const businessHits = countMatchingTerms(text, trendRules.businessTerms || []);
+  const platformHits = countMatchingTerms(text, trendRules.platformTerms || []);
+  const priorityHits = countMatchingTerms(text, trendRules.priorityThemes || []);
+  const blockedHits = countMatchingTerms(text, trendRules.blockedTerms || []);
+  const ageHours = getTrendAgeHours(article.publishedAt);
+  const freshnessScore =
+    ageHours <= 24 ? 1
+      : ageHours <= 48 ? 0.82
+        : ageHours <= 72 ? 0.68
+          : ageHours <= 120 ? 0.45
+            : 0.2;
+
+  const relevanceScore = clamp(
+    creatorHits * 0.18
+      + businessHits * 0.16
+      + platformHits * 0.08
+      + priorityHits * 0.12
+      - blockedHits * 0.25,
+  );
+
+  const totalScore = clamp(relevanceScore * 0.62 + freshnessScore * 0.38);
+
+  return {
+    totalScore,
+    relevanceScore,
+    freshnessScore,
+    creatorHits,
+    businessHits,
+    platformHits,
+    priorityHits,
+    blockedHits,
+    ageHours,
+  };
+}
+
+function shouldKeepTrendArticle(article, scoring) {
+  if (!article.title || !article.url) return false;
+  if (scoring.blockedHits > 0) return false;
+  if (scoring.businessHits < 1) return false;
+  if (scoring.creatorHits < 1 && scoring.platformHits < 1) return false;
+  return true;
+}
+
+function buildTrendSeedTopic(article, bucket, productKey) {
+  const sourceTitle = String(article.title || "").trim();
+
+  if (bucket?.cluster === "platform-policy-and-disclosure") {
+    return `What ${sourceTitle} means for creators reviewing sponsorships right now`;
+  }
+
+  if (productKey === "email_decoder") {
+    return `How creators should respond when ${sourceTitle.toLowerCase()} affects inbound brand outreach`;
+  }
+
+  if (productKey === "brand_analyze") {
+    return `What creators should check when ${sourceTitle.toLowerCase()} changes brand trust signals`;
+  }
+
+  return `Why ${sourceTitle.toLowerCase()} matters when creators qualify brand deals`;
+}
+
+function buildTrendAngle(article, bucket, productKey) {
+  const providerLabel = article.provider === "currents" ? "Currents" : "GNews";
+  const productName = PRODUCT_CONTEXT[productKey]?.name || PRODUCT_CONTEXT.deal_hunter.name;
+  return [
+    `Use the recent signal from ${providerLabel} as a timeliness hook, but turn it into practical guidance for creators.`,
+    `Explain what changed, why it matters for sponsorship decisions, and how ${productName} can support better judgment.`,
+    article.description ? `Key signal summary: ${article.description}` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function buildTrendCandidates(articles, trendRules, queryRules) {
+  const buckets = Object.fromEntries((trendRules.queryBuckets || []).map((bucket) => [bucket.id, bucket]));
+
+  return (articles || [])
+    .map((article) => {
+      const classifiedBucketId = classifyTrendBucket(article);
+      article.bucketId = classifiedBucketId;
+      const bucket = buckets[article.bucketId] || null;
+      const scoring = scoreTrendArticle(article, trendRules);
+      if (
+        scoring.totalScore < Number(trendRules.minimumTrendScore || 0.56)
+        || !shouldKeepTrendArticle(article, scoring)
+      ) {
+        return null;
+      }
+
+      const productKey = mapTrendProduct(article, trendRules, queryRules);
+      const seedTopic = buildTrendSeedTopic(article, bucket, productKey);
+
+      return {
+        id: `trend-${article.provider}-${slugify(article.title)}`,
+        topicKey: `trend:${article.provider}:${slugify(article.title)}`,
+        layer: "trend_linked",
+        cluster: bucket?.cluster || "trend-linked",
+        primaryProduct: productKey,
+        intentType: bucket?.intentType || "trend",
+        priority: clamp(0.62 + scoring.totalScore * 0.28),
+        seedTopic,
+        audience: "creators and creator-side operators reacting to platform or brand-partnership changes",
+        angle: buildTrendAngle(article, bucket, productKey),
+        tags: sanitizeTags([
+          ...(bucket?.tags || []),
+          article.sourceName.toLowerCase(),
+          productKey.replace(/_/g, " "),
+        ]),
+        sourceType: "trend_signal",
+        templateType: "trend_signal",
+        keywordGroup: `trend:${bucket?.id || "general"}:${slugify(article.title).split("-").slice(0, 8).join("-")}`,
+        trendSignal: {
+          ...article,
+          totalScore: scoring.totalScore,
+          relevanceScore: scoring.relevanceScore,
+          freshnessScore: scoring.freshnessScore,
+        },
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => (right.trendSignal?.totalScore || 0) - (left.trendSignal?.totalScore || 0))
+    .slice(0, Number(trendRules.maxCandidates || 12));
+}
+
+async function getTrendContext(configBundle) {
+  const trendRules = configBundle.trendRules || {};
+  const currentsApiKey = getEnv("BLOG_CURRENTS_API_KEY");
+  const gnewsApiKey = getEnv("BLOG_GNEWS_API_KEY");
+
+  if (!currentsApiKey && !gnewsApiKey) {
+    return {
+      ok: false,
+      reason: "missing_keys",
+      message: "No trend source API keys were provided. V3 will continue without external trend signals.",
+      articles: [],
+      candidates: [],
+    };
+  }
+
+  const articleResults = await Promise.all(
+    [
+      fetchCurrentsArticles({ apiKey: currentsApiKey, trendRules }).catch((error) => {
+        logError("TREND", error, {
+          provider: "currents",
+        });
+        return [];
+      }),
+      fetchGNewsArticles({ apiKey: gnewsApiKey, trendRules }).catch((error) => {
+        logError("TREND", error, {
+          provider: "gnews",
+        });
+        return [];
+      }),
+    ],
+  );
+
+  const articles = dedupeTrendArticles(articleResults.flat()).filter((article) => {
+    const ageHours = getTrendAgeHours(article.publishedAt);
+    return ageHours <= Number(getEnv("BLOG_TREND_LOOKBACK_HOURS", String(DEFAULT_TREND_LOOKBACK_HOURS)));
+  });
+
+  return {
+    ok: true,
+    reason: "",
+    message: "",
+    articles,
+    candidates: buildTrendCandidates(articles, trendRules, configBundle.queryRules),
+  };
+}
+
 function hashToUnitInterval(input) {
   const digest = crypto.createHash("sha256").update(String(input)).digest("hex").slice(0, 8);
   return parseInt(digest, 16) / 0xffffffff;
@@ -1615,8 +2275,15 @@ function rankCandidates({
   recentEntries,
 }) {
   const minimumScore = Number(scoringRules.minimumScore || 0.55);
-  const ranked = candidates
-    .filter((candidate) => candidate.layer === selectedLayer)
+  let scopedCandidates = candidates.filter((candidate) => candidate.layer === selectedLayer);
+  if (
+    selectedLayer === "trend_linked"
+    && scopedCandidates.some((candidate) => candidate.sourceType === "trend_signal")
+  ) {
+    scopedCandidates = scopedCandidates.filter((candidate) => candidate.sourceType === "trend_signal");
+  }
+
+  const ranked = scopedCandidates
     .map((candidate) => {
       const normalized = normalizeForScoring(candidate);
       const scoring = scoreCandidate({
@@ -1685,6 +2352,7 @@ function selectCandidate({
   publishLog,
   dateString,
   searchConsoleCandidates = [],
+  trendCandidates = [],
 }) {
   const recentEntries = getRecentPublishWindow(
     publishLog,
@@ -1712,7 +2380,7 @@ function selectCandidate({
   }
 
   const candidatePool = dedupeCandidates(
-    buildCandidatePool(configBundle, args, searchConsoleCandidates),
+    buildCandidatePool(configBundle, args, [...searchConsoleCandidates, ...trendCandidates]),
     manifest.posts || [],
     publishLog,
   );
@@ -1952,6 +2620,7 @@ function buildPromptContext(candidate, internalLinkingRules, queryRules) {
     brandBlacklist: queryRules.brandTerms || [],
     legacyBlacklist: queryRules.legacyTerms || [],
     templateType: candidate.templateType || candidate.sourceType || candidate.layer,
+    trendSignal: candidate.trendSignal || null,
   };
 }
 
@@ -1980,6 +2649,17 @@ function buildDraftPrompt({
     : "";
   const scenarioContext = candidate.niche
     ? `Scenario context: ${toSentenceCase(candidate.niche)} creators on ${candidate.platform} with ${candidate.followerTier}.`
+    : "";
+  const trendContext = promptContext.trendSignal
+    ? [
+        `Recent signal title: ${promptContext.trendSignal.title}`,
+        promptContext.trendSignal.description
+          ? `Recent signal summary: ${promptContext.trendSignal.description}`
+          : "",
+        `Recent signal source: ${promptContext.trendSignal.sourceName}`,
+        `Recent signal published at: ${promptContext.trendSignal.publishedAt}`,
+        "Use this only as timely context. Do not rewrite it like a news recap and do not invent unsupported facts.",
+      ].filter(Boolean).join("\n")
     : "";
 
   return [
@@ -2024,6 +2704,7 @@ function buildDraftPrompt({
     "",
     brandContext,
     scenarioContext,
+    trendContext,
     templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
     "",
@@ -2298,314 +2979,465 @@ function buildTopicLedgerEntry({
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const stepTracker = createStepTracker();
+  const runState = {
+    startedAt: new Date(),
+    timeZone: getEnv("BLOG_TIMEZONE", DEFAULT_TIMEZONE),
+    sequenceNumber: 0,
+    layer: "",
+    sourceType: "",
+    primaryProduct: "",
+    title: "",
+    slug: "",
+    pageUrl: "",
+    manifestUrl: "",
+    documentUrl: "",
+    imageUrl: "",
+    wordCount: 0,
+    tags: [],
+    ctaStyle: "",
+    searchConsoleCandidateCount: 0,
+    trendCandidateCount: 0,
+    errorMessage: "",
+    failedStep: "",
+    failedStepLabel: "",
+  };
+  const dingTalkWebhook = getEnv("BLOG_DINGTALK_WEBHOOK", DEFAULT_DINGTALK_WEBHOOK);
+  let notificationStatus = args.dryRun ? "dry_run" : "failed";
+
+  stepTracker.start("BOOT");
   logStep("BOOT", "Starting blog publisher", {
     dryRun: args.dryRun,
     topicOverride: args.topic || "",
     layerOverride: args.layer || "",
     productOverride: args.product || "",
   });
-
-  await loadLocalEnvFiles();
-  const configBundle = await loadV1ConfigBundle();
-  logStep("CONFIG", "Loaded V1 content configuration", {
-    topicCounts: {
-      coreEditorial: configBundle.topicLibrary.coreEditorial?.length || 0,
-      toolProblem: configBundle.topicLibrary.toolProblem?.length || 0,
-      trendLinked: configBundle.topicLibrary.trendLinked?.length || 0,
-      brands: configBundle.programmaticLibrary.brands?.length || 0,
-      emailScenarios: configBundle.programmaticLibrary.emailScenarios?.length || 0,
-      creatorScenarios: configBundle.programmaticLibrary.creatorScenarios?.length || 0,
-    },
-  });
-
-  const projectRoot = getProjectRoot();
-  const timeZone = getEnv("BLOG_TIMEZONE", DEFAULT_TIMEZONE);
-  const now = new Date();
-  const { year, month, date } = formatDateParts(now, timeZone);
-  const siteBaseUrl = await getSiteBaseUrl(projectRoot);
-
-  const secret = getEnv("BLOG_REVALIDATE_SECRET", DEFAULT_REVALIDATE_SECRET);
-  const aiBaseUrl = getEnv("BLOG_AI_BASE_URL", DEFAULT_AI_BASE_URL);
-  const aiApiKey = getEnv("BLOG_AI_API_KEY");
-  const textModel = getEnv("BLOG_TEXT_MODEL", DEFAULT_TEXT_MODEL);
-  const imageModel = getEnv("BLOG_IMAGE_MODEL", DEFAULT_IMAGE_MODEL);
-  const ossBucket = getEnv("BLOG_OSS_BUCKET", DEFAULT_OSS_BUCKET);
-  const ossEndpoint = getEnv("BLOG_OSS_ENDPOINT", DEFAULT_OSS_ENDPOINT);
-  const ossPrefix = getEnv("BLOG_OSS_PREFIX", DEFAULT_OSS_PREFIX).replace(/^\/+|\/+$/g, "");
-
-  logStep("CONFIG", "Resolved runtime configuration", {
-    projectRoot,
-    siteBaseUrl,
-    timeZone,
-    textModel,
-    imageModel,
-    ossBucket,
-    ossEndpoint,
-    ossPrefix,
-    hasAiApiKey: Boolean(aiApiKey),
-    hasOssAccessKeyId: Boolean(getEnv("BLOG_OSS_ACCESS_KEY_ID")),
-    hasOssAccessKeySecret: Boolean(getEnv("BLOG_OSS_ACCESS_KEY_SECRET")),
-    hasRevalidateSecret: Boolean(secret),
-  });
-
-  const publicOssBaseUrl = buildPublicOssBaseUrl(ossBucket, ossEndpoint);
-  const fixedManifestUrl = `${publicOssBaseUrl}/${ossPrefix}/manifest.json`;
-  const manifestContext = await getCurrentManifestContext({
-    siteBaseUrl,
-    secret,
-    fallbackManifestUrl: fixedManifestUrl,
-  });
-
-  const manifest = manifestContext.manifest || {
-    version: "",
-    generatedAt: "",
-    total: 0,
-    posts: [],
-  };
-  const searchConsoleContext = await getSearchConsoleContext(configBundle.queryRules, siteBaseUrl);
-  logStep("SEARCH_CONSOLE", "Resolved query source", {
-    ok: searchConsoleContext.ok,
-    source: searchConsoleContext.source,
-    reason: searchConsoleContext.reason || "",
-    rows: searchConsoleContext.rows?.length || 0,
-    candidates: searchConsoleContext.candidates?.length || 0,
-    credentialKind: searchConsoleContext.credentialKind || "",
-  });
-  if (searchConsoleContext.ok && searchConsoleContext.candidates?.length) {
-    logStep("SEARCH_CONSOLE", "Top usable queries", {
-      queries: searchConsoleContext.candidates.slice(0, 5).map((item) => ({
-        seedTopic: item.seedTopic,
-        product: item.primaryProduct,
-        layer: item.layer,
-        impressions: item.searchConsole?.impressions || 0,
-        relevance: item.searchConsole?.relevanceScore || 0,
-        opportunity: item.searchConsole?.opportunityScore || 0,
-      })),
+  try {
+    await loadLocalEnvFiles();
+    const configBundle = await loadV1ConfigBundle();
+    logStep("CONFIG", "Loaded V1 content configuration", {
+      topicCounts: {
+        coreEditorial: configBundle.topicLibrary.coreEditorial?.length || 0,
+        toolProblem: configBundle.topicLibrary.toolProblem?.length || 0,
+        trendLinked: configBundle.topicLibrary.trendLinked?.length || 0,
+        brands: configBundle.programmaticLibrary.brands?.length || 0,
+        emailScenarios: configBundle.programmaticLibrary.emailScenarios?.length || 0,
+        creatorScenarios: configBundle.programmaticLibrary.creatorScenarios?.length || 0,
+      },
     });
-  }
 
-  if (!aiApiKey) {
-    throw new Error("Missing BLOG_AI_API_KEY.");
-  }
+    const projectRoot = getProjectRoot();
+    const timeZone = getEnv("BLOG_TIMEZONE", DEFAULT_TIMEZONE);
+    runState.timeZone = timeZone;
+    const now = new Date();
+    const { year, month, date } = formatDateParts(now, timeZone);
+    const siteBaseUrl = await getSiteBaseUrl(projectRoot);
 
-  const publishLog = await readPublishLog();
-  const selection = selectCandidate({
-    args,
-    configBundle,
-    manifest,
-    publishLog,
-    dateString: date,
-    searchConsoleCandidates: searchConsoleContext.ok ? searchConsoleContext.candidates : [],
-  });
-  const candidate = selection.candidate;
-  const templateProfile = getTemplateProfile(configBundle.programmaticLibrary, candidate);
+    const secret = getEnv("BLOG_REVALIDATE_SECRET", DEFAULT_REVALIDATE_SECRET);
+    const aiBaseUrl = getEnv("BLOG_AI_BASE_URL", DEFAULT_AI_BASE_URL);
+    const aiApiKey = getEnv("BLOG_AI_API_KEY");
+    const textModel = getEnv("BLOG_TEXT_MODEL", DEFAULT_TEXT_MODEL);
+    const imageModel = getEnv("BLOG_IMAGE_MODEL", DEFAULT_IMAGE_MODEL);
+    const ossBucket = getEnv("BLOG_OSS_BUCKET", DEFAULT_OSS_BUCKET);
+    const ossEndpoint = getEnv("BLOG_OSS_ENDPOINT", DEFAULT_OSS_ENDPOINT);
+    const ossPrefix = getEnv("BLOG_OSS_PREFIX", DEFAULT_OSS_PREFIX).replace(/^\/+|\/+$/g, "");
 
-  const draft = await generateBlogDraft({
-    manifest,
-    candidate,
-    dateString: date,
-    apiKey: aiApiKey,
-    baseUrl: aiBaseUrl,
-    model: textModel,
-    internalLinkingRules: configBundle.internalLinkingRules,
-    queryRules: configBundle.queryRules,
-    toneRules: configBundle.toneRules,
-    templateProfile,
-  });
+    logStep("CONFIG", "Resolved runtime configuration", {
+      projectRoot,
+      siteBaseUrl,
+      timeZone,
+      textModel,
+      imageModel,
+      ossBucket,
+      ossEndpoint,
+      ossPrefix,
+      hasAiApiKey: Boolean(aiApiKey),
+      hasOssAccessKeyId: Boolean(getEnv("BLOG_OSS_ACCESS_KEY_ID")),
+      hasOssAccessKeySecret: Boolean(getEnv("BLOG_OSS_ACCESS_KEY_SECRET")),
+      hasRevalidateSecret: Boolean(secret),
+      hasCurrentsApiKey: Boolean(getEnv("BLOG_CURRENTS_API_KEY")),
+      hasGnewsApiKey: Boolean(getEnv("BLOG_GNEWS_API_KEY")),
+      hasDingTalkWebhook: Boolean(dingTalkWebhook),
+    });
 
-  const existingSlugs = new Set((manifest.posts || []).map((post) => post.slug));
-  const slug = ensureUniqueSlug(slugify(draft.title), existingSlugs);
-  logStep("PLAN", "Resolved slug", {
-    slug,
-    title: draft.title,
-    layer: candidate.layer,
-  });
+    const publicOssBaseUrl = buildPublicOssBaseUrl(ossBucket, ossEndpoint);
+    const fixedManifestUrl = `${publicOssBaseUrl}/${ossPrefix}/manifest.json`;
+    runState.manifestUrl = fixedManifestUrl;
+    const manifestContext = await getCurrentManifestContext({
+      siteBaseUrl,
+      secret,
+      fallbackManifestUrl: fixedManifestUrl,
+    });
 
-  const author = {
-    name: DEFAULT_AUTHOR_NAME,
-    avatar:
-      String(
-        manifest.posts?.find((post) => post.author?.avatar)?.author?.avatar || DEFAULT_AUTHOR_AVATAR,
-      ).trim() || DEFAULT_AUTHOR_AVATAR,
-  };
+    const manifest = manifestContext.manifest || {
+      version: "",
+      generatedAt: "",
+      total: 0,
+      posts: [],
+    };
+    runState.sequenceNumber = Number(manifest.total || manifest.posts?.length || 0) + 1;
 
-  const imageAsset = await generateCoverImage({
-    prompt: draft.imagePrompt,
-    apiKey: aiApiKey,
-    baseUrl: aiBaseUrl,
-    model: imageModel,
-  });
+    const searchConsoleContext = await getSearchConsoleContext(configBundle.queryRules, siteBaseUrl);
+    runState.searchConsoleCandidateCount = searchConsoleContext.candidates?.length || 0;
+    logStep("SEARCH_CONSOLE", "Resolved query source", {
+      ok: searchConsoleContext.ok,
+      source: searchConsoleContext.source,
+      reason: searchConsoleContext.reason || "",
+      rows: searchConsoleContext.rows?.length || 0,
+      candidates: searchConsoleContext.candidates?.length || 0,
+      credentialKind: searchConsoleContext.credentialKind || "",
+    });
+    if (searchConsoleContext.ok && searchConsoleContext.candidates?.length) {
+      logStep("SEARCH_CONSOLE", "Top usable queries", {
+        queries: searchConsoleContext.candidates.slice(0, 5).map((item) => ({
+          seedTopic: item.seedTopic,
+          product: item.primaryProduct,
+          layer: item.layer,
+          impressions: item.searchConsole?.impressions || 0,
+          relevance: item.searchConsole?.relevanceScore || 0,
+          opportunity: item.searchConsole?.opportunityScore || 0,
+        })),
+      });
+    }
+    const trendContext = await getTrendContext(configBundle);
+    runState.trendCandidateCount = trendContext.candidates?.length || 0;
+    logStep("TREND", "Resolved external trend signals", {
+      ok: trendContext.ok,
+      reason: trendContext.reason || "",
+      articles: trendContext.articles?.length || 0,
+      candidates: trendContext.candidates?.length || 0,
+    });
+    if (trendContext.ok && trendContext.candidates?.length) {
+      logStep("TREND", "Top usable trend candidates", {
+        topics: trendContext.candidates.slice(0, 5).map((item) => ({
+          seedTopic: item.seedTopic,
+          product: item.primaryProduct,
+          score: item.trendSignal?.totalScore || 0,
+          source: item.trendSignal?.sourceName || "",
+        })),
+      });
+    }
 
-  const imageExtension = inferFileExtension(imageAsset.mimeType);
-  const imageKey = `${ossPrefix}/images/${year}/${month}/${slug}-cover.${imageExtension}`;
-  const imageUrl = `${publicOssBaseUrl}/${imageKey}`;
-  const documentKey = `${ossPrefix}/posts/${slug}.json`;
-  const documentUrl = `${publicOssBaseUrl}/${documentKey}`;
+    if (!aiApiKey) {
+      throw new Error("Missing BLOG_AI_API_KEY.");
+    }
 
-  const enriched = enrichMarkdown({
-    draft,
-    manifest,
-    candidate,
-    slug,
-    siteBaseUrl,
-    internalLinkingRules: configBundle.internalLinkingRules,
-    scoringRules: configBundle.scoringRules,
-    toneRules: configBundle.toneRules,
-    score: candidate.score || 1,
-  });
+    const publishLog = await readPublishLog();
+    stepTracker.start("TOPIC_SELECTION");
+    const selection = selectCandidate({
+      args,
+      configBundle,
+      manifest,
+      publishLog,
+      dateString: date,
+      searchConsoleCandidates: searchConsoleContext.ok ? searchConsoleContext.candidates : [],
+      trendCandidates: trendContext.ok ? trendContext.candidates : [],
+    });
+    const candidate = selection.candidate;
+    const templateProfile = getTemplateProfile(configBundle.programmaticLibrary, candidate);
+    runState.layer = candidate.layer;
+    runState.sourceType = candidate.sourceType || "library";
+    runState.primaryProduct = candidate.primaryProduct;
+    stepTracker.success("TOPIC_SELECTION", {
+      layer: candidate.layer,
+      sourceType: candidate.sourceType || "library",
+      product: candidate.primaryProduct,
+    });
+    stepTracker.success("BOOT", {
+      siteBaseUrl,
+      sequenceNumber: runState.sequenceNumber,
+    });
 
-  logStep("PLAN", "Resolved output targets", {
-    imageKey,
-    documentKey,
-    manifestUrl: fixedManifestUrl,
-    ctaStyle: enriched.ctaStyle,
-  });
-
-  const postDocument = buildBlogDocument({
-    slug,
-    draft: false,
-    dateString: date,
-    imageUrl,
-    title: draft.title,
-    description: draft.description,
-    seoTitle: draft.seoTitle,
-    seoDescription: draft.seoDescription,
-    markdown: enriched.markdown,
-    tags: draft.tags.length ? draft.tags : ["creator deals", "collabgrow", "blog"],
-    author,
-  });
-
-  const postSummary = buildBlogSummary(documentUrl, postDocument);
-  const mergedPosts = sortPostsByDate([
-    postSummary,
-    ...(manifest.posts || []).filter((post) => post.slug !== slug),
-  ]);
-  const nextManifest = {
-    version: createStablePostId(),
-    generatedAt: now.toISOString(),
-    total: mergedPosts.length,
-    posts: mergedPosts,
-  };
-  const publishLogEntry = buildPublishLogEntry({
-    slug,
-    draft,
-    candidate,
-    ctaStyle: enriched.ctaStyle,
-    score: candidate.score || 1,
-    dateString: date,
-  });
-  const topicLedgerEntry = buildTopicLedgerEntry({
-    dateString: date,
-    candidate,
-    rankedPreview: selection.rankedPreview,
-    ctaStyle: enriched.ctaStyle,
-    slug,
-  });
-
-  logStep("MANIFEST", "Prepared next manifest", {
-    totalPosts: nextManifest.total,
-    slug,
-    layer: candidate.layer,
-    primaryProduct: candidate.primaryProduct,
-  });
-
-  if (args.dryRun) {
-    await appendTopicLedger(topicLedgerEntry);
-    const previewPath = await writePreviewArtifacts(slug, {
+    stepTracker.start("AI_TEXT");
+    const draft = await generateBlogDraft({
+      manifest,
       candidate,
+      dateString: date,
+      apiKey: aiApiKey,
+      baseUrl: aiBaseUrl,
+      model: textModel,
+      internalLinkingRules: configBundle.internalLinkingRules,
+      queryRules: configBundle.queryRules,
+      toneRules: configBundle.toneRules,
       templateProfile,
-      rankedPreview: selection.rankedPreview,
-      currentManifestUrl: manifestContext.manifestUrl,
-      nextManifestUrl: fixedManifestUrl,
+    });
+    runState.title = draft.title;
+    runState.wordCount = getWordCount(draft.markdown);
+    runState.tags = draft.tags;
+    stepTracker.success("AI_TEXT", {
+      title: draft.title,
+      wordCount: runState.wordCount,
+    });
+
+    const existingSlugs = new Set((manifest.posts || []).map((post) => post.slug));
+    const slug = ensureUniqueSlug(slugify(draft.title), existingSlugs);
+    runState.slug = slug;
+    logStep("PLAN", "Resolved slug", {
+      slug,
+      title: draft.title,
+      layer: candidate.layer,
+    });
+
+    const author = {
+      name: DEFAULT_AUTHOR_NAME,
+      avatar:
+        String(
+          manifest.posts?.find((post) => post.author?.avatar)?.author?.avatar || DEFAULT_AUTHOR_AVATAR,
+        ).trim() || DEFAULT_AUTHOR_AVATAR,
+    };
+
+    stepTracker.start("AI_IMAGE");
+    const imageAsset = await generateCoverImage({
+      prompt: draft.imagePrompt,
+      apiKey: aiApiKey,
+      baseUrl: aiBaseUrl,
+      model: imageModel,
+    });
+    stepTracker.success("AI_IMAGE", {
+      mimeType: imageAsset.mimeType,
+    });
+
+    const imageExtension = inferFileExtension(imageAsset.mimeType);
+    const imageKey = `${ossPrefix}/images/${year}/${month}/${slug}-cover.${imageExtension}`;
+    const imageUrl = `${publicOssBaseUrl}/${imageKey}`;
+    const documentKey = `${ossPrefix}/posts/${slug}.json`;
+    const documentUrl = `${publicOssBaseUrl}/${documentKey}`;
+    runState.imageUrl = imageUrl;
+    runState.documentUrl = documentUrl;
+    runState.pageUrl = siteBaseUrl ? `${siteBaseUrl}/blog/${slug}` : "";
+
+    const enriched = enrichMarkdown({
+      draft,
+      manifest,
+      candidate,
+      slug,
+      siteBaseUrl,
+      internalLinkingRules: configBundle.internalLinkingRules,
+      scoringRules: configBundle.scoringRules,
+      toneRules: configBundle.toneRules,
+      score: candidate.score || 1,
+    });
+    runState.ctaStyle = enriched.ctaStyle;
+
+    logStep("PLAN", "Resolved output targets", {
       imageKey,
       documentKey,
+      manifestUrl: fixedManifestUrl,
       ctaStyle: enriched.ctaStyle,
-      postDocument,
-      nextManifest,
-      publishLogEntry,
-      topicLedgerEntry,
     });
+
+    const postDocument = buildBlogDocument({
+      slug,
+      draft: false,
+      dateString: date,
+      imageUrl,
+      title: draft.title,
+      description: draft.description,
+      seoTitle: draft.seoTitle,
+      seoDescription: draft.seoDescription,
+      markdown: enriched.markdown,
+      tags: draft.tags.length ? draft.tags : ["creator deals", "collabgrow", "blog"],
+      author,
+    });
+
+    const postSummary = buildBlogSummary(documentUrl, postDocument);
+    const mergedPosts = sortPostsByDate([
+      postSummary,
+      ...(manifest.posts || []).filter((post) => post.slug !== slug),
+    ]);
+    const nextManifest = {
+      version: createStablePostId(),
+      generatedAt: now.toISOString(),
+      total: mergedPosts.length,
+      posts: mergedPosts,
+    };
+    const publishLogEntry = buildPublishLogEntry({
+      slug,
+      draft,
+      candidate,
+      ctaStyle: enriched.ctaStyle,
+      score: candidate.score || 1,
+      dateString: date,
+    });
+    const topicLedgerEntry = buildTopicLedgerEntry({
+      dateString: date,
+      candidate,
+      rankedPreview: selection.rankedPreview,
+      ctaStyle: enriched.ctaStyle,
+      slug,
+    });
+
+    logStep("MANIFEST", "Prepared next manifest", {
+      totalPosts: nextManifest.total,
+      slug,
+      layer: candidate.layer,
+      primaryProduct: candidate.primaryProduct,
+    });
+
+    if (args.dryRun) {
+      stepTracker.skip("OSS_UPLOAD");
+      stepTracker.skip("MANIFEST_UPDATE");
+      stepTracker.skip("REVALIDATE");
+      stepTracker.skip("VERIFY");
+      await appendTopicLedger(topicLedgerEntry);
+      const previewPath = await writePreviewArtifacts(slug, {
+        candidate,
+        templateProfile,
+        rankedPreview: selection.rankedPreview,
+        currentManifestUrl: manifestContext.manifestUrl,
+        nextManifestUrl: fixedManifestUrl,
+        imageKey,
+        documentKey,
+        ctaStyle: enriched.ctaStyle,
+        postDocument,
+        nextManifest,
+        publishLogEntry,
+        topicLedgerEntry,
+      });
+
+      notificationStatus = "dry_run";
+
+      console.log(
+        JSON.stringify(
+          {
+            ok: true,
+            dryRun: true,
+            slug,
+            topic: candidate.seedTopic,
+            layer: candidate.layer,
+            primaryProduct: candidate.primaryProduct,
+            previewPath,
+            manifestUrl: fixedManifestUrl,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    stepTracker.start("OSS_UPLOAD");
+    logStep("OSS", "Creating OSS client");
+    const ossClient = createOssClient();
+    await putObject(ossClient, imageKey, imageAsset.buffer, {
+      "Content-Type": imageAsset.mimeType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    await putObject(ossClient, documentKey, Buffer.from(JSON.stringify(postDocument, null, 2)), {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+    });
+    stepTracker.success("OSS_UPLOAD", {
+      imageKey,
+      documentKey,
+    });
+
+    stepTracker.start("MANIFEST_UPDATE");
+    await putObject(
+      ossClient,
+      `${ossPrefix}/manifest.json`,
+      Buffer.from(JSON.stringify(nextManifest, null, 2)),
+      {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
+    );
+    stepTracker.success("MANIFEST_UPDATE", {
+      totalPosts: nextManifest.total,
+    });
+
+    stepTracker.start("REVALIDATE");
+    const revalidateResult = await revalidateSite({
+      siteBaseUrl,
+      secret,
+      manifestUrl: fixedManifestUrl,
+    });
+    stepTracker.success("REVALIDATE");
+
+    stepTracker.start("VERIFY");
+    const verification = await verifyPublishedPost({
+      siteBaseUrl,
+      slug,
+    });
+    stepTracker.success("VERIFY", {
+      verifiedSlug: verification?.post?.slug || "",
+    });
+    await appendPublishLog(publishLogEntry);
+    await appendTopicLedger(topicLedgerEntry);
+
+    logStep("VERIFY", "Publish flow completed", {
+      slug,
+      verificationAvailable: Boolean(verification?.post?.slug),
+    });
+
+    notificationStatus = "success";
 
     console.log(
       JSON.stringify(
         {
           ok: true,
-          dryRun: true,
+          dryRun: false,
           slug,
           topic: candidate.seedTopic,
           layer: candidate.layer,
           primaryProduct: candidate.primaryProduct,
-          previewPath,
           manifestUrl: fixedManifestUrl,
+          imageUrl,
+          documentUrl,
+          revalidateResult,
+          verification: verification
+            ? {
+                slug: verification.post?.slug,
+                title: verification.post?.title,
+              }
+            : null,
         },
         null,
         2,
       ),
     );
-    return;
+  } catch (error) {
+    const activeFailureStep = stepTracker
+      .snapshot()
+      .find((step) => step.status === "running");
+    if (activeFailureStep?.step) {
+      stepTracker.fail(activeFailureStep.step, error);
+      runState.failedStep = activeFailureStep.step;
+      runState.failedStepLabel = activeFailureStep.label;
+    } else {
+      stepTracker.fail("BOOT", error);
+      runState.failedStep = "BOOT";
+      runState.failedStepLabel = NOTIFICATION_STEP_LABELS.BOOT;
+    }
+
+    runState.errorMessage = error instanceof Error ? error.message : String(error);
+    logError("FATAL", error);
+    throw error;
+  } finally {
+    const markdownText = buildDingTalkMarkdown({
+      status: notificationStatus,
+      args,
+      runState,
+      stepTracker,
+    });
+    const titlePrefix =
+      notificationStatus === "success"
+        ? "Blog 自动发布成功"
+        : notificationStatus === "dry_run"
+          ? "Blog 自动演练完成"
+          : "Blog 自动发布失败";
+    const titleSuffix = runState.sequenceNumber ? `｜第${runState.sequenceNumber}篇` : "";
+    const titleSlug = runState.slug ? `｜${runState.slug}` : "";
+    try {
+      await sendDingTalkNotification({
+        webhook: dingTalkWebhook,
+        title: `${titlePrefix}${titleSuffix}${titleSlug}`,
+        markdownText,
+      });
+    } catch (notificationError) {
+      logError("DINGTALK", notificationError);
+    }
   }
-
-  logStep("OSS", "Creating OSS client");
-  const ossClient = createOssClient();
-  await putObject(ossClient, imageKey, imageAsset.buffer, {
-    "Content-Type": imageAsset.mimeType,
-    "Cache-Control": "public, max-age=31536000, immutable",
-  });
-  await putObject(ossClient, documentKey, Buffer.from(JSON.stringify(postDocument, null, 2)), {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "public, max-age=300",
-  });
-  await putObject(
-    ossClient,
-    `${ossPrefix}/manifest.json`,
-    Buffer.from(JSON.stringify(nextManifest, null, 2)),
-    {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-    },
-  );
-
-  const revalidateResult = await revalidateSite({
-    siteBaseUrl,
-    secret,
-    manifestUrl: fixedManifestUrl,
-  });
-  const verification = await verifyPublishedPost({
-    siteBaseUrl,
-    slug,
-  });
-  await appendPublishLog(publishLogEntry);
-  await appendTopicLedger(topicLedgerEntry);
-
-  logStep("VERIFY", "Publish flow completed", {
-    slug,
-    verificationAvailable: Boolean(verification?.post?.slug),
-  });
-
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        dryRun: false,
-        slug,
-        topic: candidate.seedTopic,
-        layer: candidate.layer,
-        primaryProduct: candidate.primaryProduct,
-        manifestUrl: fixedManifestUrl,
-        imageUrl,
-        documentUrl,
-        revalidateResult,
-        verification: verification
-          ? {
-              slug: verification.post?.slug,
-              title: verification.post?.title,
-            }
-          : null,
-      },
-      null,
-      2,
-    ),
-  );
 }
 
 main().catch((error) => {

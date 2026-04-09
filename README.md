@@ -2,6 +2,10 @@
 
 This directory contains the standalone automation logic for generating and publishing blog posts.
 
+For full architecture and flow documentation, see:
+
+- `docs/BLOG_AUTOMATION_ARCHITECTURE.md`
+
 ## Local test
 
 ```bash
@@ -38,6 +42,12 @@ pnpm blog:publish
 - `BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON`
 - `BLOG_SEARCH_CONSOLE_LOOKBACK_DAYS`
 - `BLOG_SEARCH_CONSOLE_EXPORT_PATH`
+- `BLOG_CURRENTS_API_KEY`
+- `BLOG_GNEWS_API_KEY`
+- `BLOG_TREND_LOOKBACK_HOURS`
+- `BLOG_TREND_LANG`
+- `BLOG_TREND_COUNTRY`
+- `BLOG_DINGTALK_WEBHOOK`
 
 ## Workflow
 
@@ -87,10 +97,52 @@ Recommended production settings:
 - `BLOG_SEARCH_CONSOLE_PROPERTY=https://collabgrow.lgi365.com`
 - `BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON=<service account json>`
 
-For GitHub Actions:
+## V3 trend signal layer
 
-- add `BLOG_SEARCH_CONSOLE_PROPERTY` as an Actions Variable
-- add `BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON` as an Actions Secret
+V3 adds two external news sources and treats them as lightweight trend signals rather than article source material.
+
+- Currents API
+- GNews API
+
+The publisher normalizes both source formats into one internal structure, filters them against creator-business relevance, and only then turns the strongest signals into `trend_linked` candidates.
+
+Recommended production settings:
+
+- `BLOG_CURRENTS_API_KEY=<currents api key>`
+- `BLOG_GNEWS_API_KEY=<gnews api key>`
+- `BLOG_TREND_LOOKBACK_HOURS=72`
+- `BLOG_TREND_LANG=en`
+- `BLOG_TREND_COUNTRY=us`
+
+## DingTalk notification
+
+The publisher can send a Chinese markdown summary to a DingTalk robot webhook after every run.
+
+- success: sends publish result, URLs, step status, and content summary
+- dry-run: sends generation result without publish URLs
+- failure: sends failed step, error summary, and troubleshooting links
+
+Recommended production setting:
+
+- `BLOG_DINGTALK_WEBHOOK=<dingtalk webhook url>`
+
+## GitHub Actions setup
+
+Configure these secrets in the `auto-blog` repository:
+
+- `BLOG_AI_API_KEY`
+- `BLOG_OSS_ACCESS_KEY_ID`
+- `BLOG_OSS_ACCESS_KEY_SECRET`
+- `BLOG_REVALIDATE_SECRET`
+- `BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON`
+- `BLOG_CURRENTS_API_KEY`
+- `BLOG_GNEWS_API_KEY`
+- `BLOG_DINGTALK_WEBHOOK`
+
+Configure these variables:
+
+- `SITE_BASE_URL=https://collabgrow.lgi365.com`
+- `BLOG_SEARCH_CONSOLE_PROPERTY=https://collabgrow.lgi365.com`
 
 The script keeps local state in:
 

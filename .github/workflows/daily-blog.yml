@@ -37,7 +37,9 @@ jobs:
       BLOG_OSS_ACCESS_KEY_ID: ${{ secrets.BLOG_OSS_ACCESS_KEY_ID }}
       BLOG_OSS_ACCESS_KEY_SECRET: ${{ secrets.BLOG_OSS_ACCESS_KEY_SECRET }}
       BLOG_REVALIDATE_SECRET: ${{ secrets.BLOG_REVALIDATE_SECRET }}
-      # Recommended value: https://collabgrow.lgi365.com
+      BLOG_CURRENTS_API_KEY: ${{ secrets.BLOG_CURRENTS_API_KEY }}
+      BLOG_GNEWS_API_KEY: ${{ secrets.BLOG_GNEWS_API_KEY }}
+      BLOG_DINGTALK_WEBHOOK: ${{ secrets.BLOG_DINGTALK_WEBHOOK }}
       SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
       # Recommended value: https://collabgrow.lgi365.com
       BLOG_SEARCH_CONSOLE_PROPERTY: ${{ vars.BLOG_SEARCH_CONSOLE_PROPERTY }}

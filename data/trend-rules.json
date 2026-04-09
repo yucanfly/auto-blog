@@ -1,0 +1,145 @@
+{
+  "sources": {
+    "currents": {
+      "baseUrl": "https://api.currentsapi.services/v1/search",
+      "language": "en",
+      "pageSize": 6,
+      "query": "(creator OR influencer) AND (sponsorship OR \"brand deal\" OR disclosure OR monetization)"
+    },
+    "gnews": {
+      "baseUrl": "https://gnews.io/api/v4/search",
+      "language": "en",
+      "country": "us",
+      "max": 6,
+      "in": "title,description",
+      "query": "(creator OR influencer) AND (sponsorship OR \"brand deal\" OR disclosure OR monetization OR scam)"
+    }
+  },
+  "queryBuckets": [
+    {
+      "id": "creator-sponsorship-risk",
+      "query": "\"creator\" OR \"influencer\" OR \"ugc creator\" AND (sponsorship OR \"brand deal\" OR \"paid collaboration\" OR whitelisting OR \"usage rights\" OR deliverables OR \"payment terms\" OR scam)",
+      "cluster": "creator-sponsorship-risk",
+      "primaryProduct": "deal_hunter",
+      "intentType": "trend",
+      "tags": [
+        "creator deals",
+        "sponsorship risk",
+        "deal hunter"
+      ]
+    },
+    {
+      "id": "brand-vetting-and-trust",
+      "query": "(brand OR campaign OR partner) AND (legitimacy OR reputation OR trust OR scam OR fraud OR safety OR review OR risk)",
+      "cluster": "brand-vetting-and-trust",
+      "primaryProduct": "brand_analyze",
+      "intentType": "trend",
+      "tags": [
+        "brand vetting",
+        "brand trust",
+        "brand analyze"
+      ]
+    },
+    {
+      "id": "email-outreach-and-inbox",
+      "query": "(creator OR influencer OR brand) AND (email OR outreach OR inbox OR pitch) AND (scam OR fake OR disclosure OR deliverables OR terms OR reply)",
+      "cluster": "email-outreach-and-inbox",
+      "primaryProduct": "email_decoder",
+      "intentType": "trend",
+      "tags": [
+        "sponsorship email",
+        "email review",
+        "email decoder"
+      ]
+    },
+    {
+      "id": "platform-policy-and-disclosure",
+      "query": "(YouTube OR TikTok OR Instagram OR Reddit OR X) AND (creator OR influencer) AND (policy OR guidelines OR disclosure OR monetization OR ads OR partnership)",
+      "cluster": "platform-policy-and-disclosure",
+      "primaryProduct": "deal_hunter",
+      "intentType": "trend",
+      "tags": [
+        "creator policy",
+        "platform changes",
+        "creator sponsorships"
+      ]
+    }
+  ],
+  "priorityThemes": [
+    "sponsorship scam",
+    "fake brand outreach",
+    "creator fraud",
+    "whitelisting",
+    "usage rights",
+    "affiliate-only deals",
+    "payment terms",
+    "deliverables",
+    "contract red flags",
+    "brand legitimacy",
+    "brand safety",
+    "creator monetization",
+    "paid collaboration",
+    "brand partnership disclosure",
+    "campaign exclusivity",
+    "platform policy",
+    "creator economy regulation",
+    "creator reputation risk",
+    "inbox overload",
+    "creator outreach"
+  ],
+  "platformTerms": [
+    "youtube",
+    "tiktok",
+    "instagram",
+    "reddit",
+    "x",
+    "twitter"
+  ],
+  "creatorTerms": [
+    "creator",
+    "creators",
+    "influencer",
+    "influencers",
+    "ugc",
+    "content creator",
+    "content creators"
+  ],
+  "businessTerms": [
+    "brand deal",
+    "brand deals",
+    "sponsorship",
+    "sponsorships",
+    "paid collaboration",
+    "collab",
+    "campaign",
+    "deliverables",
+    "payment terms",
+    "usage rights",
+    "whitelisting",
+    "affiliate",
+    "brand outreach",
+    "contract",
+    "brand safety",
+    "reputation risk",
+    "legitimacy",
+    "scam",
+    "fraud"
+  ],
+  "blockedTerms": [
+    "celebrity relationship",
+    "gossip",
+    "movie release",
+    "music chart",
+    "box office",
+    "gaming leak",
+    "stock price",
+    "crypto token",
+    "election",
+    "war",
+    "sports score",
+    "lawsuit unrelated to creators"
+  ],
+  "minimumTrendScore": 0.56,
+  "maxArticlesPerBucket": 4,
+  "maxCandidates": 12
+}
