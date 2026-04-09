@@ -1,0 +1,46 @@
+{
+  "layerTargets": {
+    "core_editorial": 0.45,
+    "tool_problem": 0.25,
+    "controlled_programmatic": 0.2,
+    "trend_linked": 0.1
+  },
+  "scoreWeights": {
+    "businessFit": 0.35,
+    "searchIntent": 0.25,
+    "conversionFit": 0.2,
+    "topicalGap": 0.1,
+    "freshness": 0.1,
+    "priority": 0.08,
+    "cannibalizationRisk": 0.25
+  },
+  "productPriority": {
+    "deal_hunter": 1,
+    "email_decoder": 0.78,
+    "brand_analyze": 0.74
+  },
+  "intentScores": {
+    "workflow": 0.92,
+    "framework": 0.9,
+    "checklist": 0.88,
+    "red-flags": 0.87,
+    "how-to": 0.84,
+    "template": 0.76,
+    "trend": 0.68,
+    "review": 0.82,
+    "scenario": 0.83
+  },
+  "layerFreshness": {
+    "core_editorial": 0.54,
+    "tool_problem": 0.58,
+    "controlled_programmatic": 0.66,
+    "trend_linked": 0.92
+  },
+  "ctaMix": {
+    "soft": 0.6,
+    "weak": 0.3,
+    "strong": 0.1
+  },
+  "minimumScore": 0.55,
+  "recentPublishWindow": 20
+}

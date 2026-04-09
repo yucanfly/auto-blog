@@ -1,0 +1,250 @@
+{
+  "coreEditorial": [
+    {
+      "id": "core-qualify-sponsorship-emails",
+      "cluster": "deal-qualification",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.98,
+      "seedTopic": "How creators can qualify sponsorship emails faster without missing strong deals",
+      "audience": "mid-market creators and creator managers",
+      "angle": "Teach a repeatable inbox triage framework that protects time and still catches high-fit offers.",
+      "tags": ["creator deals", "sponsorship emails", "deal qualification", "workflow"]
+    },
+    {
+      "id": "core-brand-fit-framework",
+      "cluster": "deal-qualification",
+      "primaryProduct": "deal_hunter",
+      "intentType": "framework",
+      "priority": 0.96,
+      "seedTopic": "How creators can decide whether a brand deal is actually a fit before replying",
+      "audience": "solo creators and small talent teams",
+      "angle": "Focus on brand fit, audience fit, deliverables, payment logic, and timing tradeoffs.",
+      "tags": ["brand fit", "creator strategy", "brand partnerships", "deal hunter"]
+    },
+    {
+      "id": "core-red-flags-sponsorship-contracts",
+      "cluster": "risk-detection",
+      "primaryProduct": "deal_hunter",
+      "intentType": "red-flags",
+      "priority": 0.95,
+      "seedTopic": "The red flags creators should spot before accepting a sponsorship opportunity",
+      "audience": "creators reviewing inbound sponsorship opportunities",
+      "angle": "Break down how risky terms show up before the contract stage and what to check early.",
+      "tags": ["sponsorship red flags", "creator risk", "brand deals", "deal review"]
+    },
+    {
+      "id": "core-deal-worth-it",
+      "cluster": "deal-qualification",
+      "primaryProduct": "deal_hunter",
+      "intentType": "checklist",
+      "priority": 0.94,
+      "seedTopic": "How to tell if a brand collaboration is worth your time and audience trust",
+      "audience": "creators weighing collaboration opportunities",
+      "angle": "Compare payout, effort, usage rights, audience alignment, and downside risk in one checklist.",
+      "tags": ["brand collaboration", "creator business", "deal value", "audience trust"]
+    },
+    {
+      "id": "core-fake-brand-outreach",
+      "cluster": "risk-detection",
+      "primaryProduct": "deal_hunter",
+      "intentType": "red-flags",
+      "priority": 0.93,
+      "seedTopic": "How creators can spot fake brand outreach before wasting time on it",
+      "audience": "creators receiving cold outreach",
+      "angle": "Explain practical scam signals in outreach messaging, landing pages, and proposal structure.",
+      "tags": ["fake brand outreach", "creator scams", "sponsorship safety", "deal hunter"]
+    },
+    {
+      "id": "core-scoring-brand-partnerships",
+      "cluster": "deal-qualification",
+      "primaryProduct": "deal_hunter",
+      "intentType": "framework",
+      "priority": 0.91,
+      "seedTopic": "A scoring system creators can use to compare sponsorship opportunities",
+      "audience": "creators managing multiple offers",
+      "angle": "Turn subjective deal decisions into a lightweight scoring model for faster decision-making.",
+      "tags": ["deal scoring", "sponsorship workflow", "creator systems", "brand offers"]
+    },
+    {
+      "id": "core-deliverables-overload",
+      "cluster": "operations",
+      "primaryProduct": "deal_hunter",
+      "intentType": "mistakes",
+      "priority": 0.9,
+      "seedTopic": "How creators can catch deliverable overload before saying yes to a brand deal",
+      "audience": "creators negotiating deliverables",
+      "angle": "Show how brands hide effort in revisions, optional asks, usage, and reporting requirements.",
+      "tags": ["deliverables", "creator workflow", "brand deal terms", "paid collaboration"]
+    },
+    {
+      "id": "core-creator-negotiation-prep",
+      "cluster": "operations",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.88,
+      "seedTopic": "What creators should prepare before negotiating a sponsorship offer",
+      "audience": "creators approaching negotiation for inbound offers",
+      "angle": "Position deal review and qualification as the step that makes negotiation easier.",
+      "tags": ["creator negotiation", "sponsorship prep", "brand deals", "deal hunter"]
+    },
+    {
+      "id": "core-agency-team-standardize",
+      "cluster": "operations",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.86,
+      "seedTopic": "How creator managers and small agencies can standardize deal evaluation",
+      "audience": "creator managers and boutique talent teams",
+      "angle": "Focus on shared evaluation criteria, review consistency, and team speed.",
+      "tags": ["creator managers", "agency workflow", "deal qualification", "collaboration ops"]
+    },
+    {
+      "id": "core-brand-deal-prioritization",
+      "cluster": "operations",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.84,
+      "seedTopic": "How creators can prioritize the right deals when their inbox gets crowded",
+      "audience": "growing creators with regular inbound outreach",
+      "angle": "Turn crowded inboxes into ranked opportunities instead of reactive replies.",
+      "tags": ["inbox triage", "creator opportunities", "deal prioritization", "sponsorship workflow"]
+    }
+  ],
+  "toolProblem": [
+    {
+      "id": "tool-read-sponsorship-email",
+      "cluster": "email-workflow",
+      "primaryProduct": "email_decoder",
+      "intentType": "how-to",
+      "priority": 0.97,
+      "seedTopic": "How creators should read a sponsorship email before replying",
+      "audience": "creators handling inbound brand emails",
+      "angle": "Turn email analysis into a structured decision process: offer, risk, fit, and next step.",
+      "tags": ["email decoder", "sponsorship email", "creator workflow", "inbound outreach"]
+    },
+    {
+      "id": "tool-decode-deliverables",
+      "cluster": "email-workflow",
+      "primaryProduct": "email_decoder",
+      "intentType": "how-to",
+      "priority": 0.95,
+      "seedTopic": "How to decode hidden deliverables inside a brand outreach email",
+      "audience": "creators who receive vague or overloaded brand emails",
+      "angle": "Show how deliverables, revisions, usage rights, and deadlines are often buried in plain language.",
+      "tags": ["deliverables", "brand outreach", "email analysis", "creator deals"]
+    },
+    {
+      "id": "tool-legit-or-scam-email",
+      "cluster": "email-workflow",
+      "primaryProduct": "email_decoder",
+      "intentType": "red-flags",
+      "priority": 0.94,
+      "seedTopic": "How to tell whether a collab email is legit or a scam",
+      "audience": "creators screening unfamiliar outreach",
+      "angle": "Walk through sender quality, brand signals, urgency, attachments, and offer logic.",
+      "tags": ["scam email", "creator safety", "email decoder", "collab email"]
+    },
+    {
+      "id": "tool-reply-brand-email",
+      "cluster": "email-workflow",
+      "primaryProduct": "email_decoder",
+      "intentType": "template",
+      "priority": 0.91,
+      "seedTopic": "How creators can reply to a sponsorship email without sounding generic",
+      "audience": "creators replying to inbound offers",
+      "angle": "Combine analysis, qualification, and a practical response structure.",
+      "tags": ["reply template", "brand email", "creator outreach", "email decoder"]
+    },
+    {
+      "id": "tool-brand-check-before-yes",
+      "cluster": "brand-research",
+      "primaryProduct": "brand_analyze",
+      "intentType": "checklist",
+      "priority": 0.95,
+      "seedTopic": "How creators should vet a brand before saying yes to a collaboration",
+      "audience": "creators checking legitimacy and fit",
+      "angle": "Use trust signals, risk signals, campaign style, and creator fit as the evaluation backbone.",
+      "tags": ["brand analyze", "brand research", "creator due diligence", "sponsorship safety"]
+    },
+    {
+      "id": "tool-brand-reputation-review",
+      "cluster": "brand-research",
+      "primaryProduct": "brand_analyze",
+      "intentType": "how-to",
+      "priority": 0.93,
+      "seedTopic": "How to research a brand's reputation before accepting a sponsorship",
+      "audience": "creators doing partnership diligence",
+      "angle": "Show what matters beyond follower count: reviews, complaints, campaign history, and operational risk.",
+      "tags": ["brand reputation", "brand legitimacy", "creator deals", "brand analyze"]
+    },
+    {
+      "id": "tool-brand-fit-audience-fit",
+      "cluster": "brand-research",
+      "primaryProduct": "brand_analyze",
+      "intentType": "framework",
+      "priority": 0.9,
+      "seedTopic": "How creators can check if a brand is right for their audience before partnering",
+      "audience": "creators protecting trust and conversions",
+      "angle": "Separate good money from good-fit money by using audience alignment criteria.",
+      "tags": ["audience fit", "brand fit", "creator trust", "brand analyze"]
+    },
+    {
+      "id": "tool-operational-risk-brand-deals",
+      "cluster": "brand-research",
+      "primaryProduct": "brand_analyze",
+      "intentType": "red-flags",
+      "priority": 0.88,
+      "seedTopic": "What operational risk looks like in creator brand partnerships",
+      "audience": "creators who want fewer bad surprises after accepting a deal",
+      "angle": "Translate logistics, product quality, complaints, and campaign chaos into creator-side risk.",
+      "tags": ["operational risk", "brand deals", "creator partnerships", "brand analyze"]
+    }
+  ],
+  "trendLinked": [
+    {
+      "id": "trend-scam-seasonality",
+      "cluster": "trend-linked",
+      "primaryProduct": "email_decoder",
+      "intentType": "trend",
+      "priority": 0.84,
+      "seedTopic": "Why sponsorship scam emails spike around busy campaign seasons and how creators should respond",
+      "audience": "creators during seasonal campaign spikes",
+      "angle": "Use seasonal urgency to teach safer email review habits.",
+      "tags": ["creator scams", "campaign season", "email decoder", "trend"]
+    },
+    {
+      "id": "trend-platform-risk-diversification",
+      "cluster": "trend-linked",
+      "primaryProduct": "deal_hunter",
+      "intentType": "trend",
+      "priority": 0.82,
+      "seedTopic": "Why creators are relying more on direct brand deals when platform income feels unstable",
+      "audience": "creators diversifying revenue",
+      "angle": "Frame brand deal qualification as a response to platform volatility.",
+      "tags": ["creator economy", "direct brand deals", "platform risk", "deal hunter"]
+    },
+    {
+      "id": "trend-brand-safety-pressure",
+      "cluster": "trend-linked",
+      "primaryProduct": "brand_analyze",
+      "intentType": "trend",
+      "priority": 0.8,
+      "seedTopic": "How creator brand safety expectations are changing what sponsorship due diligence looks like",
+      "audience": "creators and managers handling higher brand scrutiny",
+      "angle": "Connect brand safety shifts to better research habits before accepting deals.",
+      "tags": ["brand safety", "creator economy", "brand analyze", "trend"]
+    },
+    {
+      "id": "trend-cross-platform-packages",
+      "cluster": "trend-linked",
+      "primaryProduct": "deal_hunter",
+      "intentType": "trend",
+      "priority": 0.78,
+      "seedTopic": "Why more creator deals now bundle multiple platforms and what to check before agreeing",
+      "audience": "creators receiving bundled campaign offers",
+      "angle": "Explain how platform bundles change workload, pricing, and deliverable complexity.",
+      "tags": ["cross-platform campaigns", "deliverables", "creator strategy", "deal hunter"]
+    }
+  ]
+}

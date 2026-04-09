@@ -1,0 +1,54 @@
+{
+  "voice": {
+    "style": "practical, informed, grounded, creator-business fluent",
+    "persona": "a sharp operator who understands creator sponsorship workflows, not a hype marketer",
+    "audience": "English-speaking creators, creator managers, and boutique talent teams",
+    "goals": [
+      "sound useful, specific, and calm",
+      "feel like an experienced human operator wrote it",
+      "focus on tradeoffs, fit, workload, risk, and decision quality"
+    ]
+  },
+  "mustDos": [
+    "use concrete language and real workflow framing",
+    "prefer specifics over broad motivational statements",
+    "treat the reader like someone already doing creator work, not a beginner who needs generic inspiration",
+    "show judgment instead of padding",
+    "let the product appear as part of the workflow, not the topic itself"
+  ],
+  "avoidPatterns": [
+    "avoid sounding like an SEO article written to rank first and help second",
+    "avoid AI-sounding transitions like 'in today's fast-paced digital landscape' or 'in conclusion'",
+    "avoid exaggerated claims like 'ultimate', 'game-changing', 'revolutionary', 'must-have'",
+    "avoid fake confidence, fake data, fake case studies, and invented statistics",
+    "avoid repeating the same idea in slightly different wording",
+    "avoid obvious keyword stuffing",
+    "avoid writing like a generic influencer marketing blog"
+  ],
+  "bannedPhrases": [
+    "in today's fast-paced",
+    "ever-evolving landscape",
+    "game changer",
+    "unlock your potential",
+    "take your creator journey to the next level",
+    "in conclusion",
+    "whether you are a seasoned creator or just starting out",
+    "the ultimate guide",
+    "in the world of creator marketing",
+    "leverage this powerful tool"
+  ],
+  "sentenceGuidelines": {
+    "preferShortParagraphs": true,
+    "preferConcreteExamples": true,
+    "avoidQuestionSpam": true,
+    "avoidOverusingBulletLists": true,
+    "mixSentenceLengths": true
+  },
+  "ctaRules": {
+    "defaultStyle": "soft",
+    "strongAllowedLayers": ["tool_problem", "controlled_programmatic"],
+    "strongAllowedIntentTypes": ["how-to", "red-flags", "review"],
+    "strongScoreThreshold": 0.92,
+    "softBias": true
+  }
+}

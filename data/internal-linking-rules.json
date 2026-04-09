@@ -1,0 +1,59 @@
+{
+  "products": {
+    "deal_hunter": {
+      "label": "Deal Hunter",
+      "url": "https://collabgrow.lgi365.com/deal-hunter",
+      "purpose": "Curated creator job board with verified listings and web-hunted opportunities.",
+      "softCtas": [
+        "If you want to compare this framework against real opportunities, Deal Hunter is a practical next step.",
+        "Deal Hunter is useful once you want to move from evaluating inbox deals to scanning active campaigns."
+      ],
+      "weakCtas": [
+        "You can also compare live opportunities inside Deal Hunter.",
+        "It can help once you want a cleaner shortlist of active campaigns."
+      ],
+      "strongCtas": [
+        "Open Deal Hunter and start filtering real brand opportunities that fit your niche, platform, and workload.",
+        "Use Deal Hunter to turn this evaluation framework into an actual shortlist of creator deals."
+      ]
+    },
+    "email_decoder": {
+      "label": "Email Decoder",
+      "url": "https://collabgrow.lgi365.com/tools/email-analyze",
+      "purpose": "Analyzes sponsorship emails, extracts deliverables, flags scams, and suggests next steps.",
+      "softCtas": [
+        "If you want a second pass on a real sponsorship email, Email Decoder can help surface the offer, risks, and missing details.",
+        "Email Decoder is useful when the message sounds promising but the real ask is still buried in the email."
+      ],
+      "weakCtas": [
+        "You can paste a real outreach email into Email Decoder for a quicker read.",
+        "It works well as a first-pass filter for unclear inbound offers."
+      ],
+      "strongCtas": [
+        "Paste your next outreach email into Email Decoder and let it surface the offer, risks, and reply angle in seconds.",
+        "Use Email Decoder before you reply so you can see the real ask, hidden workload, and red flags more clearly."
+      ]
+    },
+    "brand_analyze": {
+      "label": "Brand Analyze",
+      "url": "https://collabgrow.lgi365.com/tools/brand-analyze",
+      "purpose": "Checks brand legitimacy, risk, campaign style, trust signals, and creator fit.",
+      "softCtas": [
+        "If the brand still feels unclear, Brand Analyze can help you review legitimacy, campaign style, and risk before committing.",
+        "Brand Analyze is useful when you want a faster read on whether a brand looks credible enough for deeper negotiation."
+      ],
+      "weakCtas": [
+        "You can also run the brand through Brand Analyze for a faster reputation check.",
+        "It is a practical next step when brand trust is still uncertain."
+      ],
+      "strongCtas": [
+        "Run the brand through Brand Analyze before you say yes so you can check trust signals, risk, and campaign fit in one place.",
+        "Use Brand Analyze to verify whether this brand looks credible enough for a real creator partnership."
+      ]
+    }
+  },
+  "relatedReadingIntro": "If you want to keep improving your creator deal workflow, these resources are a strong next step:",
+  "toolSectionTitle": "Tools To Use Next",
+  "relatedReadingTitle": "Related Reading",
+  "faqSectionTitle": "FAQ"
+}

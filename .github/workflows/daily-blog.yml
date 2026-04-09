@@ -37,7 +37,12 @@ jobs:
       BLOG_OSS_ACCESS_KEY_ID: ${{ secrets.BLOG_OSS_ACCESS_KEY_ID }}
       BLOG_OSS_ACCESS_KEY_SECRET: ${{ secrets.BLOG_OSS_ACCESS_KEY_SECRET }}
       BLOG_REVALIDATE_SECRET: ${{ secrets.BLOG_REVALIDATE_SECRET }}
+      # Recommended value: https://collabgrow.lgi365.com
       SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+      # Recommended value: https://collabgrow.lgi365.com
+      BLOG_SEARCH_CONSOLE_PROPERTY: ${{ vars.BLOG_SEARCH_CONSOLE_PROPERTY }}
+      # Store the full service account JSON as a GitHub Actions secret.
+      BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON: ${{ secrets.BLOG_SEARCH_CONSOLE_CREDENTIAL_JSON }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
