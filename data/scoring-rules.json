@@ -5,6 +5,13 @@
     "controlled_programmatic": 0.2,
     "trend_linked": 0.1
   },
+  "lifecycleTargets": {
+    "readiness": 0.14,
+    "discovery": 0.24,
+    "evaluation": 0.32,
+    "execution": 0.14,
+    "optimization": 0.16
+  },
   "scoreWeights": {
     "businessFit": 0.35,
     "searchIntent": 0.25,
@@ -12,6 +19,10 @@
     "topicalGap": 0.1,
     "freshness": 0.1,
     "priority": 0.08,
+    "workflowCoverage": 0.12,
+    "productSurfaceDepth": 0.08,
+    "stateTransitionValue": 0.08,
+    "dealSupplyFit": 0.07,
     "cannibalizationRisk": 0.25
   },
   "productPriority": {
@@ -28,7 +39,8 @@
     "template": 0.76,
     "trend": 0.68,
     "review": 0.82,
-    "scenario": 0.83
+    "scenario": 0.83,
+    "mistakes": 0.81
   },
   "layerFreshness": {
     "core_editorial": 0.54,

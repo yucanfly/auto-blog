@@ -109,6 +109,54 @@
       "audience": "growing creators with regular inbound outreach",
       "angle": "Turn crowded inboxes into ranked opportunities instead of reactive replies.",
       "tags": ["inbox triage", "creator opportunities", "deal prioritization", "sponsorship workflow"]
+    },
+    {
+      "id": "core-creator-profile-readiness",
+      "cluster": "creator-readiness",
+      "primaryProduct": "deal_hunter",
+      "intentType": "checklist",
+      "priority": 0.89,
+      "lifecycleStage": "readiness",
+      "seedTopic": "What creators should fix in their profile before applying to brand deals",
+      "audience": "creators who want better-fit opportunities and fewer ignored applications",
+      "angle": "Treat profile quality, category clarity, rate baseline, and contact readiness as the foundation for better deal matching.",
+      "tags": ["creator profile", "deal readiness", "brand deals", "deal hunter"]
+    },
+    {
+      "id": "core-category-shortlist-workflow",
+      "cluster": "deal-discovery",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.9,
+      "lifecycleStage": "discovery",
+      "seedTopic": "How UGC creators should shortlist category-based brand deals instead of chasing random opportunities",
+      "audience": "UGC creators browsing opportunities by niche rather than by individual product",
+      "angle": "Show why category-first browsing improves fit, workload control, and application quality across the deal board.",
+      "tags": ["ugc creator", "category deals", "deal discovery", "deal hunter"]
+    },
+    {
+      "id": "core-reviewing-to-approved",
+      "cluster": "deal-execution",
+      "primaryProduct": "deal_hunter",
+      "intentType": "workflow",
+      "priority": 0.87,
+      "lifecycleStage": "execution",
+      "seedTopic": "How creators should move a deal from reviewing to approved without wasting momentum",
+      "audience": "creators with active applications and early brand conversations",
+      "angle": "Focus on response timing, missing-info follow-up, deliverable clarification, and when to keep pushing versus step back.",
+      "tags": ["reviewing deals", "approved deals", "creator workflow", "deal hunter"]
+    },
+    {
+      "id": "core-application-quality-optimization",
+      "cluster": "creator-optimization",
+      "primaryProduct": "deal_hunter",
+      "intentType": "mistakes",
+      "priority": 0.88,
+      "lifecycleStage": "optimization",
+      "seedTopic": "Why creators get ignored after applying to brand deals and how to fix the pattern",
+      "audience": "creators applying often but seeing weak response rates",
+      "angle": "Connect missed replies to profile quality, category mismatch, workload signals, timing, and weak qualification habits.",
+      "tags": ["creator applications", "deal optimization", "apply rate", "creator workflow"]
     }
   ],
   "toolProblem": [
@@ -199,6 +247,30 @@
       "audience": "creators who want fewer bad surprises after accepting a deal",
       "angle": "Translate logistics, product quality, complaints, and campaign chaos into creator-side risk.",
       "tags": ["operational risk", "brand deals", "creator partnerships", "brand analyze"]
+    },
+    {
+      "id": "tool-imported-deal-email-review",
+      "cluster": "email-workflow",
+      "primaryProduct": "email_decoder",
+      "intentType": "workflow",
+      "priority": 0.89,
+      "lifecycleStage": "execution",
+      "seedTopic": "How creators should turn an imported sponsorship email into a deal they can actually manage",
+      "audience": "creators bringing inbound email opportunities into a deal workflow",
+      "angle": "Show how to extract deliverables, timeline, payout, and follow-up actions so imported deals do not stay vague.",
+      "tags": ["imported deals", "email decoder", "creator workflow", "sponsorship email"]
+    },
+    {
+      "id": "tool-brand-fit-before-apply",
+      "cluster": "brand-research",
+      "primaryProduct": "brand_analyze",
+      "intentType": "workflow",
+      "priority": 0.87,
+      "lifecycleStage": "discovery",
+      "seedTopic": "How creators should use brand vetting before deciding whether to save or skip a deal",
+      "audience": "creators comparing multiple live opportunities",
+      "angle": "Position brand analysis as the step between browsing and applying, especially when the category looks good but the brand still feels uncertain.",
+      "tags": ["save or skip", "brand vetting", "deal hunter", "brand analyze"]
     }
   ],
   "trendLinked": [

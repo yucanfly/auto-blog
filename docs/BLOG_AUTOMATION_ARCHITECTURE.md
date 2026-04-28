@@ -78,6 +78,21 @@ Core capabilities:
 - source normalization
 - trend filtering and scoring
 - trend signals merged into `trend_linked`
+
+### V4
+
+Upgraded the topic system from tool-led SEO into creator-workflow SEO.
+
+Core capabilities:
+
+- creator lifecycle stages: `readiness`, `discovery`, `evaluation`, `execution`, `optimization`
+- live deal-board ingestion from the public creator marketplace
+- `category_roundup` topics built from active category supply
+- `deal_spotlight` topics built from standout live campaigns
+- lifecycle coverage scoring
+- state-transition scoring
+- product-surface depth scoring
+- deal-supply fit scoring
 - external trend candidates prioritized over pseudo-trend internal queries when available
 
 ---
@@ -586,4 +601,3 @@ If the current architecture stays in use, the next improvements should be:
 2. add performance feedback back into topic scoring
 3. log per-post origin more explicitly for reporting
 4. sync the latest V3 code to the standalone GitHub `auto-blog` repository if not already updated
-

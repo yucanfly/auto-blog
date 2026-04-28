@@ -47,6 +47,7 @@ pnpm blog:publish
 - `BLOG_TREND_LOOKBACK_HOURS`
 - `BLOG_TREND_LANG`
 - `BLOG_TREND_COUNTRY`
+- `BLOG_DEAL_SOURCE_BASE_API`
 - `BLOG_DINGTALK_WEBHOOK`
 - `BLOG_DINGTALK_SECRET`
 
@@ -114,6 +115,29 @@ Recommended production settings:
 - `BLOG_TREND_LOOKBACK_HOURS=72`
 - `BLOG_TREND_LANG=en`
 - `BLOG_TREND_COUNTRY=us`
+
+## V4 creator workflow + deal supply layer
+
+V4 upgrades the topic system from tool-led SEO into creator-workflow SEO.
+
+It adds:
+
+- creator lifecycle awareness: `readiness`, `discovery`, `evaluation`, `execution`, `optimization`
+- live deal-board signals from the public deal marketplace
+- `category_roundup` topics such as category-based deal shortlists
+- `deal_spotlight` topics that evaluate a single live campaign
+- new scoring factors for workflow coverage, state transition value, product surface depth, and deal-supply fit
+
+The deal-supply layer is powered by:
+
+- `data/deal-board-rules.json`
+- `data/deal-category-map.json`
+
+The script fetches the public campaign list and uses it as a first-party topic source. This is especially useful for:
+
+- category-led SEO around niches such as beauty, 3C, fashion, home, or pet deals
+- roundup content tied to active opportunities
+- selective spotlight content for unusually strong or interesting creator deals
 
 ## DingTalk notification
 

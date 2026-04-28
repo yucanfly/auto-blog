@@ -25,6 +25,9 @@ const DEFAULT_TREND_LOOKBACK_HOURS = 72;
 const DEFAULT_TREND_LANG = "en";
 const DEFAULT_TREND_COUNTRY = "us";
 const DEFAULT_DINGTALK_WEBHOOK = "";
+const DEFAULT_DEAL_BOARD_BASE_API = "https://api-prd.wotohub.com";
+const DEFAULT_DEAL_BOARD_ENDPOINT = "/lgi-ai/api/v2/campaign/creator/dealBoard";
+const DEFAULT_DEAL_DETAIL_ENDPOINT = "/lgi-ai/api/v2/campaign/creator/dealDetail";
 
 const NOTIFICATION_STEP_ORDER = [
   "BOOT",
@@ -61,12 +64,22 @@ const PRODUCT_LABELS_ZH = {
   brand_analyze: "Brand Analyze",
 };
 
+const LIFECYCLE_STAGE_LABELS_ZH = {
+  readiness: "接单准备",
+  discovery: "找单发现",
+  evaluation: "机会判断",
+  execution: "推进执行",
+  optimization: "复盘优化",
+};
+
 const SOURCE_LABELS_ZH = {
   library: "主题库",
   topic_library: "主题库",
   search_console: "Search Console",
   trend_signal: "趋势信号",
   programmatic_seed: "程序化种子",
+  deal_board_category: "商单分类信号",
+  deal_board_spotlight: "商单精选信号",
   forced_topic: "手动指定主题",
 };
 
@@ -334,6 +347,8 @@ function buildDingTalkMarkdown({
   const slugLineLabel = isSuccess || isDry ? "文章 Slug" : "拟定 Slug";
   const selectedSource = SOURCE_LABELS_ZH[runState.sourceType] || runState.sourceType || "未确定";
   const layerLabel = LAYER_LABELS_ZH[runState.layer] || runState.layer || "未确定";
+  const lifecycleLabel =
+    LIFECYCLE_STAGE_LABELS_ZH[runState.lifecycleStage] || runState.lifecycleStage || "未确定";
   const productLabel = PRODUCT_LABELS_ZH[runState.primaryProduct] || runState.primaryProduct || "未确定";
   const lines = [
     "# 🤖 Blog 自动发布通知",
@@ -346,6 +361,7 @@ function buildDingTalkMarkdown({
     "",
     "## 📝 本次文章",
     `- 📚 内容层级：${layerLabel}`,
+    `- 🔄 流程阶段：${lifecycleLabel}`,
     `- 🧭 选题来源：${selectedSource}`,
     `- 🎯 关联产品：${productLabel}`,
   ];
@@ -384,6 +400,7 @@ function buildDingTalkMarkdown({
   if (runState.ctaStyle) lines.push(`- 🪄 CTA 类型：${runState.ctaStyle}`);
   lines.push(`- 🔍 Search Console 候选数：${runState.searchConsoleCandidateCount || 0}`);
   lines.push(`- 📰 趋势候选数：${runState.trendCandidateCount || 0}`);
+  lines.push(`- 🎁 商单供给候选数：${runState.dealBoardCandidateCount || 0}`);
 
   if (!isSuccess) {
     lines.push("", "## 🚨 错误信息");
@@ -813,6 +830,63 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+async function postJson(url, payload, options = {}) {
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+function createDealPageSlug(title, fallback = "") {
+  const normalized = String(title || fallback || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  const slug = normalized
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return slug || fallback || `deal-${Date.now()}`;
+}
+
+function createDealPageUrl(siteBaseUrl, campaignId, title) {
+  if (!siteBaseUrl || !campaignId) return "";
+  return `${normalizeBaseUrl(siteBaseUrl)}/deal-hunter/deals/${campaignId}/${createDealPageSlug(title, campaignId)}`;
+}
+
+function createDealCategoryUrl(siteBaseUrl, categoryLabel) {
+  if (!siteBaseUrl || !categoryLabel) return "";
+  return `${normalizeBaseUrl(siteBaseUrl)}/deal-hunter/category/${slugify(categoryLabel)}`;
+}
+
+function getMonthYearLabel(dateString, timeZone = DEFAULT_TIMEZONE) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function buildCategoryLookup(dealCategoryMap) {
+  const entries = Array.isArray(dealCategoryMap) ? dealCategoryMap : [];
+  const lookup = new Map();
+  for (const item of entries) {
+    const code = String(item?.code || "").trim();
+    const label = String(item?.label || "").trim();
+    if (code && label) lookup.set(code, label);
+  }
+  return lookup;
+}
+
 function buildPublicOssBaseUrl(bucket, endpoint) {
   const normalizedEndpoint = String(endpoint || DEFAULT_OSS_ENDPOINT)
     .trim()
@@ -1085,6 +1159,8 @@ async function loadV1ConfigBundle() {
     internalLinkingRules,
     toneRules,
     trendRules,
+    dealBoardRules,
+    dealCategoryMap,
   ] =
     await Promise.all([
       loadJsonData("topic-library.json"),
@@ -1094,6 +1170,8 @@ async function loadV1ConfigBundle() {
       loadJsonData("internal-linking-rules.json"),
       loadJsonData("tone-rules.json"),
       loadJsonData("trend-rules.json"),
+      loadJsonData("deal-board-rules.json"),
+      loadJsonData("deal-category-map.json"),
     ]);
 
   return {
@@ -1104,6 +1182,8 @@ async function loadV1ConfigBundle() {
     internalLinkingRules,
     toneRules,
     trendRules,
+    dealBoardRules,
+    dealCategoryMap,
   };
 }
 
@@ -1502,6 +1582,37 @@ function buildSearchConsoleSeedTopic(query, layer, productKey) {
   return `How creators can turn ${normalized} into better sponsorship decisions`;
 }
 
+function classifySearchConsoleLifecycleStage(query, layer, productKey) {
+  const normalized = normalizeSearchConsoleQuery(query);
+  if (normalized.includes("profile") || normalized.includes("rate card") || normalized.includes("media kit")) {
+    return "readiness";
+  }
+  if (
+    normalized.includes("brand deal")
+    || normalized.includes("paidcollab")
+    || normalized.includes("opportunity")
+    || layer === "core_editorial"
+  ) {
+    return "discovery";
+  }
+  if (
+    productKey === "email_decoder"
+    || productKey === "brand_analyze"
+    || normalized.includes("legit")
+    || normalized.includes("checker")
+    || normalized.includes("review")
+  ) {
+    return "evaluation";
+  }
+  if (normalized.includes("reply") || normalized.includes("follow up")) {
+    return "execution";
+  }
+  if (normalized.includes("improve") || normalized.includes("why")) {
+    return "optimization";
+  }
+  return "evaluation";
+}
+
 function classifySearchConsoleIntent(query, layer) {
   const normalized = normalizeSearchConsoleQuery(query);
   if (layer === "trend_linked") return "trend";
@@ -1521,6 +1632,7 @@ function buildSearchConsoleCandidates(rows, queryRules) {
   return (rows || []).filter((row) => shouldKeepSearchConsoleRow(row, queryRules)).map((row) => {
     const productKey = classifySearchConsoleProduct(row.query, queryRules);
     const layer = classifySearchConsoleLayer(row.query, productKey);
+    const lifecycleStage = classifySearchConsoleLifecycleStage(row.query, layer, productKey);
     const relevanceScore = computeSearchConsoleRelevance(row.query, queryRules);
     const opportunityScore = computeSearchConsoleOpportunity(row);
     const priority = clamp(0.58 + relevanceScore * 0.22 + opportunityScore * 0.2);
@@ -1528,6 +1640,7 @@ function buildSearchConsoleCandidates(rows, queryRules) {
       id: `search-console-${slugify(row.query)}`,
       topicKey: `search-console:${slugify(row.query)}`,
       layer,
+      lifecycleStage,
       cluster: "search-console-query",
       primaryProduct: productKey,
       intentType: classifySearchConsoleIntent(row.query, layer),
@@ -1895,11 +2008,13 @@ function buildTrendCandidates(articles, trendRules, queryRules) {
 
       const productKey = mapTrendProduct(article, trendRules, queryRules);
       const seedTopic = buildTrendSeedTopic(article, bucket, productKey);
+      const lifecycleStage = bucket?.cluster === "platform-policy-and-disclosure" ? "evaluation" : "discovery";
 
       return {
         id: `trend-${article.provider}-${slugify(article.title)}`,
         topicKey: `trend:${article.provider}:${slugify(article.title)}`,
         layer: "trend_linked",
+        lifecycleStage,
         cluster: bucket?.cluster || "trend-linked",
         primaryProduct: productKey,
         intentType: bucket?.intentType || "trend",
@@ -1972,6 +2087,440 @@ async function getTrendContext(configBundle) {
     articles,
     candidates: buildTrendCandidates(articles, trendRules, configBundle.queryRules),
   };
+}
+
+function getDealBoardBaseApi(dealBoardRules) {
+  return normalizeBaseUrl(
+    getEnv("BLOG_DEAL_SOURCE_BASE_API", dealBoardRules?.source?.baseApi || DEFAULT_DEAL_BOARD_BASE_API),
+  );
+}
+
+function buildDealBoardUrl(dealBoardRules, endpoint) {
+  const baseApi = getDealBoardBaseApi(dealBoardRules);
+  const targetEndpoint = endpoint || dealBoardRules?.source?.boardEndpoint || DEFAULT_DEAL_BOARD_ENDPOINT;
+  return `${baseApi}${targetEndpoint}`;
+}
+
+function getTopLevelCategoryCodes(codes, categoryLookup) {
+  const result = new Set();
+  for (const rawCode of codes || []) {
+    const code = String(rawCode || "").trim();
+    if (!code) continue;
+    if (categoryLookup.has(code)) {
+      result.add(code);
+      continue;
+    }
+    const prefix = code.slice(0, 2);
+    if (categoryLookup.has(prefix)) {
+      result.add(prefix);
+    }
+  }
+  return [...result];
+}
+
+function getTopLevelCategoryNames(codes, categoryLookup) {
+  return getTopLevelCategoryCodes(codes, categoryLookup)
+    .map((code) => categoryLookup.get(code))
+    .filter(Boolean);
+}
+
+function normalizeUsdAmount(amount, currency, dealBoardRules) {
+  const numericAmount = Number(amount || 0);
+  if (!numericAmount) return 0;
+  const normalizedCurrency = String(currency || "USD").trim().toUpperCase();
+  const rates = dealBoardRules?.currencyUsdApprox || {};
+  const multiplier = Number(rates[normalizedCurrency] || 1);
+  return numericAmount * multiplier;
+}
+
+function getDeadlineUrgencyScore(endDate, isLongtime) {
+  if (Number(isLongtime) === 1) return 0.85;
+  if (!endDate) return 0.4;
+  const timestamp = new Date(endDate).getTime();
+  if (!timestamp) return 0.4;
+  const diffDays = Math.max(0, (timestamp - Date.now()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 7) return 1;
+  if (diffDays <= 14) return 0.86;
+  if (diffDays <= 30) return 0.66;
+  return 0.42;
+}
+
+function getFollowerBarrierScore(minFollowers) {
+  const value = Number(minFollowers || 0);
+  if (!value) return 1;
+  if (value <= 3000) return 0.96;
+  if (value <= 5000) return 0.88;
+  if (value <= 10000) return 0.76;
+  if (value <= 50000) return 0.5;
+  return 0.22;
+}
+
+function getPlatformCoverageScore(platforms, dealBoardRules) {
+  const configured = new Set((dealBoardRules?.platformPriority || []).map((item) => String(item || "").toLowerCase()));
+  const normalized = uniqueStrings(platforms).map((item) => String(item || "").toLowerCase());
+  if (!normalized.length) return 0.25;
+  const matching = normalized.filter((item) => configured.has(item)).length;
+  return clamp(matching / Math.max(configured.size || 1, 5) * 2.4, 0, 1);
+}
+
+function formatCompensationSnippet(deal) {
+  const bits = [];
+  const currency = String(deal.fixedCompensationCurrency || deal.productMarketPriceCurrency || "USD").toUpperCase();
+  const fixedMin = Number(deal.fixedCompensationMin || 0);
+  const fixedMax = Number(deal.fixedCompensationMax || 0);
+  const commMin = Number(deal.commissionRateMin || 0);
+  const commMax = Number(deal.commissionRateMax || 0);
+
+  if (fixedMin || fixedMax) {
+    if (fixedMin && fixedMax && fixedMin !== fixedMax) {
+      bits.push(`${currency} ${fixedMin}-${fixedMax} fixed`);
+    } else {
+      bits.push(`${currency} ${fixedMax || fixedMin} fixed`);
+    }
+  }
+
+  if (commMin || commMax) {
+    if (commMin && commMax && commMin !== commMax) {
+      bits.push(`${commMin}-${commMax}% commission`);
+    } else {
+      bits.push(`${commMax || commMin}% commission`);
+    }
+  }
+
+  if (Number(deal.isFreeSample) === 1) {
+    bits.push("free sample");
+  }
+
+  return bits.join(" + ");
+}
+
+function summarizeDealSignal(deal, siteBaseUrl) {
+  const categoryLabel = Array.isArray(deal.categoryNames) && deal.categoryNames.length
+    ? deal.categoryNames[0]
+    : "";
+  return {
+    campaignId: deal.campaignId,
+    brandName: deal.brandName || "",
+    title: deal.campaignTitle,
+    categoryLabel,
+    categoryUrl: categoryLabel ? createDealCategoryUrl(siteBaseUrl, categoryLabel) : "",
+    pageUrl: createDealPageUrl(siteBaseUrl, deal.campaignId, deal.campaignTitle),
+    platforms: uniqueStrings(deal.platforms || []),
+    compensationSummary: formatCompensationSnippet(deal),
+    followerMin: Number(deal.fansNumMin || 0),
+    endDate: deal.campaignEndDate || "",
+    longterm: Number(deal.isLongtime || 0) === 1,
+    spotlightScore: Number(deal.spotlightScore || 0),
+  };
+}
+
+function scoreDealBoardRow(row, dealBoardRules) {
+  const fixedUsd = Math.max(
+    normalizeUsdAmount(row.fixedCompensationMin, row.fixedCompensationCurrency, dealBoardRules),
+    normalizeUsdAmount(row.fixedCompensationMax, row.fixedCompensationCurrency, dealBoardRules),
+  );
+  const marketUsd = normalizeUsdAmount(
+    row.productMarketPrice,
+    row.productMarketPriceCurrency,
+    dealBoardRules,
+  );
+  const commission = Math.max(Number(row.commissionRateMin || 0), Number(row.commissionRateMax || 0));
+  const platformCoverage = getPlatformCoverageScore(row.platforms, dealBoardRules);
+  const barrierScore = getFollowerBarrierScore(row.fansNumMin);
+  const urgencyScore = getDeadlineUrgencyScore(row.campaignEndDate, row.isLongtime);
+  const sampleScore = Number(row.isFreeSample) === 1 ? 0.82 : 0.24;
+  const longtermScore = Number(row.isLongtime) === 1 ? 0.88 : 0.4;
+  const tagHits = countMatchingTerms((row.systemTag || []).join(" "), dealBoardRules.highlightTags || []);
+  const fixedPayScore = clamp(Math.log10(fixedUsd + 1) / 3);
+  const marketValueScore = clamp(Math.log10(marketUsd + 1) / 3.1);
+  const commissionScore = clamp(commission / 25);
+
+  return clamp(
+    fixedPayScore * 0.22
+      + marketValueScore * 0.1
+      + commissionScore * 0.2
+      + barrierScore * 0.12
+      + platformCoverage * 0.12
+      + urgencyScore * 0.09
+      + sampleScore * 0.07
+      + longtermScore * 0.05
+      + clamp(tagHits * 0.1) * 0.03,
+  );
+}
+
+async function fetchDealBoardRows({ dealBoardRules, categoryLookup }) {
+  const payload = await postJson(
+    buildDealBoardUrl(dealBoardRules, dealBoardRules?.source?.boardEndpoint || DEFAULT_DEAL_BOARD_ENDPOINT),
+    {
+      currentPage: 1,
+      pageSize: Number(dealBoardRules?.source?.pageSize || 9999),
+      status: Number(dealBoardRules?.source?.status || 0),
+      keyword: "",
+      blogCateIds: [],
+    },
+  );
+
+  const rows = Array.isArray(payload?.data?.rows) ? payload.data.rows : [];
+
+  return rows.map((row) => {
+    const categoryCodes = getTopLevelCategoryCodes(row.bloggerCateList || [], categoryLookup);
+    const categoryNames = categoryCodes.map((code) => categoryLookup.get(code)).filter(Boolean);
+    const spotlightScore = scoreDealBoardRow(row, dealBoardRules);
+
+    return {
+      ...row,
+      categoryCodes,
+      categoryNames,
+      spotlightScore,
+    };
+  });
+}
+
+async function fetchDealDetailRecord({ campaignId, dealBoardRules }) {
+  if (!campaignId) return null;
+  const payload = await postJson(
+    buildDealBoardUrl(dealBoardRules, dealBoardRules?.source?.detailEndpoint || DEFAULT_DEAL_DETAIL_ENDPOINT),
+    { campaignId },
+  );
+  return payload?.data || null;
+}
+
+function getCategoryPriorityIndex(categoryCode, dealBoardRules) {
+  const list = dealBoardRules?.categoryPriority || [];
+  const index = list.indexOf(categoryCode);
+  return index >= 0 ? index : list.length + 5;
+}
+
+function buildCategoryRoundupCandidates({
+  rows,
+  dealBoardRules,
+  dateString,
+  timeZone,
+  siteBaseUrl,
+}) {
+  const groups = new Map();
+  for (const row of rows) {
+    for (const categoryCode of row.categoryCodes || []) {
+      if (!groups.has(categoryCode)) {
+        groups.set(categoryCode, []);
+      }
+      groups.get(categoryCode).push(row);
+    }
+  }
+
+  const monthLabel = getMonthYearLabel(dateString, timeZone);
+  const minimumCategoryDeals = Number(dealBoardRules?.ranking?.minimumCategoryDeals || 4);
+
+  return [...groups.entries()]
+    .map(([categoryCode, deals]) => {
+      const categoryLabel = deals[0]?.categoryNames?.find(Boolean) || "Creator Deals";
+      const highlightedDeals = [...deals]
+        .sort((left, right) => Number(right.spotlightScore || 0) - Number(left.spotlightScore || 0))
+        .slice(0, Number(dealBoardRules?.ranking?.maxHighlightedDealsPerCategory || 4))
+        .map((deal) => summarizeDealSignal(deal, siteBaseUrl));
+      const lowBarrierCount = deals.filter((deal) => Number(deal.fansNumMin || 0) <= 5000 || !deal.fansNumMin).length;
+      const multiPlatformCount = deals.filter((deal) => (deal.platforms || []).length >= 3).length;
+      const averageScore =
+        deals.reduce((sum, deal) => sum + Number(deal.spotlightScore || 0), 0) / Math.max(deals.length, 1);
+      return {
+        id: `deal-category-${categoryCode}-${dateString.slice(0, 7)}`,
+        topicKey: `deal-category:${categoryCode}:${dateString.slice(0, 7)}`,
+        layer: "core_editorial",
+        cluster: "deal-discovery",
+        lifecycleStage: "discovery",
+        primaryProduct: "deal_hunter",
+        supportedProducts: ["deal_hunter", "brand_analyze"],
+        intentType: "workflow",
+        priority: clamp(0.72 + deals.length * 0.012 + averageScore * 0.12),
+        seedTopic: `Best ${categoryLabel} brand deals for UGC creators in ${monthLabel}`,
+        audience: `${categoryLabel} creators looking for live brand opportunities that fit their niche and workload`,
+        angle: `Use active deal-board supply to shortlist the ${categoryLabel} campaigns that look most worth reviewing right now, then explain who each one suits and what to check before applying.`,
+        tags: sanitizeTags([
+          categoryLabel.toLowerCase(),
+          "ugc creator",
+          "brand deals",
+          "deal hunter",
+          "creator opportunities",
+        ]),
+        sourceType: "deal_board_category",
+        templateType: "category_roundup",
+        keywordGroup: `deal-category:${categoryCode}:${dateString.slice(0, 7)}`,
+        stateTransitionValue: clamp(0.88 + lowBarrierCount * 0.01),
+        dealSupplyFit: clamp(0.6 + deals.length * 0.015),
+        dealBoardSignal: {
+          type: "category_roundup",
+          categoryCode,
+          categoryLabel,
+          categoryUrl: createDealCategoryUrl(siteBaseUrl, categoryLabel),
+          categoryCount: deals.length,
+          lowBarrierCount,
+          multiPlatformCount,
+          highlightedDeals,
+          averageScore,
+          monthLabel,
+        },
+      };
+    })
+    .filter((candidate) => Number(candidate.dealBoardSignal?.categoryCount || 0) >= minimumCategoryDeals)
+    .sort((left, right) => {
+      const countDiff = Number(right.dealBoardSignal.categoryCount || 0) - Number(left.dealBoardSignal.categoryCount || 0);
+      if (countDiff !== 0) return countDiff;
+      const priorityDiff = getCategoryPriorityIndex(left.dealBoardSignal.categoryCode, dealBoardRules)
+        - getCategoryPriorityIndex(right.dealBoardSignal.categoryCode, dealBoardRules);
+      if (priorityDiff !== 0) return priorityDiff;
+      return Number(right.priority || 0) - Number(left.priority || 0);
+    })
+    .slice(0, Number(dealBoardRules?.ranking?.maxCategoryCandidates || 10));
+}
+
+function buildDealSpotlightCandidates({
+  rows,
+  dealBoardRules,
+  siteBaseUrl,
+}) {
+  const threshold = Number(dealBoardRules?.ranking?.minimumSpotlightScore || 0.58);
+  return [...rows]
+    .filter((row) => {
+      const text = normalizeTrendText(`${row.campaignTitle} ${row.campaignDescription} ${(row.systemTag || []).join(" ")}`);
+      return !containsAnyTerm(text, dealBoardRules?.blockedTerms || []);
+    })
+    .sort((left, right) => Number(right.spotlightScore || 0) - Number(left.spotlightScore || 0))
+    .filter((row) => Number(row.spotlightScore || 0) >= threshold)
+    .slice(0, Number(dealBoardRules?.ranking?.maxSpotlightCandidates || 12))
+    .map((row) => {
+      const categoryLabel = row.categoryNames?.[0] || "creator";
+      const dealLabel = row.brandName
+        ? `${row.brandName} ${categoryLabel} deal`
+        : `${categoryLabel} creator deal`;
+      return {
+        id: `deal-spotlight-${row.campaignId}`,
+        topicKey: `deal-spotlight:${row.campaignId}`,
+        layer: "controlled_programmatic",
+        cluster: "deal-spotlight",
+        lifecycleStage: "evaluation",
+        primaryProduct: "deal_hunter",
+        supportedProducts: ["deal_hunter", "brand_analyze"],
+        intentType: "review",
+        priority: clamp(0.76 + Number(row.spotlightScore || 0) * 0.18),
+        seedTopic: `Is the ${dealLabel} worth applying to right now? A creator breakdown`,
+        audience: "creators deciding whether one active campaign deserves real attention",
+        angle: `Break down the actual upside, friction, payout structure, platform fit, and timing behind this live campaign so creators can decide whether to apply, save it, or skip it.`,
+        tags: sanitizeTags([
+          row.brandName?.toLowerCase() || "creator deal",
+          categoryLabel.toLowerCase(),
+          "deal spotlight",
+          "deal hunter",
+          "creator breakdown",
+        ]),
+        sourceType: "deal_board_spotlight",
+        templateType: "deal_spotlight",
+        keywordGroup: `deal-spotlight:${row.campaignId}`,
+        stateTransitionValue: 0.94,
+        dealSupplyFit: clamp(0.7 + Number(row.spotlightScore || 0) * 0.2),
+        dealBoardSignal: {
+          type: "deal_spotlight",
+          campaignId: row.campaignId,
+          categoryCode: row.categoryCodes?.[0] || "",
+          categoryLabel,
+          categoryUrl: categoryLabel ? createDealCategoryUrl(siteBaseUrl, categoryLabel) : "",
+          detailPageUrl: createDealPageUrl(siteBaseUrl, row.campaignId, row.campaignTitle),
+          highlightedDeals: [summarizeDealSignal(row, siteBaseUrl)],
+          spotlightScore: Number(row.spotlightScore || 0),
+          compensationSummary: formatCompensationSnippet(row),
+          platforms: uniqueStrings(row.platforms || []),
+          longterm: Number(row.isLongtime || 0) === 1,
+          followersMin: Number(row.fansNumMin || 0),
+        },
+      };
+    });
+}
+
+async function getDealBoardContext({ configBundle, siteBaseUrl, dateString, timeZone }) {
+  const categoryLookup = buildCategoryLookup(configBundle.dealCategoryMap);
+  try {
+    const rows = await fetchDealBoardRows({
+      dealBoardRules: configBundle.dealBoardRules,
+      categoryLookup,
+    });
+    const categoryCandidates = buildCategoryRoundupCandidates({
+      rows,
+      dealBoardRules: configBundle.dealBoardRules,
+      dateString,
+      timeZone,
+      siteBaseUrl,
+    });
+    const spotlightCandidates = buildDealSpotlightCandidates({
+      rows,
+      dealBoardRules: configBundle.dealBoardRules,
+      siteBaseUrl,
+    });
+    return {
+      ok: true,
+      rows,
+      categoryCandidates,
+      spotlightCandidates,
+      candidates: [...categoryCandidates, ...spotlightCandidates],
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "deal_board_failed",
+      message: error instanceof Error ? error.message : String(error),
+      rows: [],
+      categoryCandidates: [],
+      spotlightCandidates: [],
+      candidates: [],
+    };
+  }
+}
+
+async function hydrateDealBoardCandidate(candidate, dealBoardRules, siteBaseUrl) {
+  if (!candidate?.dealBoardSignal) return candidate;
+
+  const nextCandidate = {
+    ...candidate,
+    dealBoardSignal: {
+      ...candidate.dealBoardSignal,
+    },
+  };
+
+  if (candidate.dealBoardSignal.type === "deal_spotlight" && candidate.dealBoardSignal.campaignId) {
+    const detail = await fetchDealDetailRecord({
+      campaignId: candidate.dealBoardSignal.campaignId,
+      dealBoardRules,
+    }).catch(() => null);
+    if (detail) {
+      nextCandidate.dealBoardSignal.detail = {
+        ...detail,
+        detailPageUrl: createDealPageUrl(siteBaseUrl, detail.campaignId, detail.campaignTitle),
+        categoryUrl: candidate.dealBoardSignal.categoryUrl || "",
+        compensationSummary: formatCompensationSnippet(detail),
+      };
+    }
+  }
+
+  if (candidate.dealBoardSignal.type === "category_roundup") {
+    const highlightedIds = (candidate.dealBoardSignal.highlightedDeals || [])
+      .map((deal) => deal.campaignId)
+      .filter(Boolean)
+      .slice(0, 3);
+    if (highlightedIds.length) {
+      const detailRows = await Promise.all(
+        highlightedIds.map((campaignId) =>
+          fetchDealDetailRecord({ campaignId, dealBoardRules }).catch(() => null),
+        ),
+      );
+      nextCandidate.dealBoardSignal.highlightedDealDetails = detailRows
+        .filter(Boolean)
+        .map((detail) => ({
+          ...detail,
+          detailPageUrl: createDealPageUrl(siteBaseUrl, detail.campaignId, detail.campaignTitle),
+          compensationSummary: formatCompensationSnippet(detail),
+        }));
+    }
+  }
+
+  return nextCandidate;
 }
 
 function hashToUnitInterval(input) {
@@ -2048,6 +2597,7 @@ function normalizeTopicRecord(record, layer) {
   return {
     ...record,
     layer,
+    lifecycleStage: record.lifecycleStage || inferLifecycleStage(record),
     topicKey: `${layer}:${record.id}`,
     primaryProduct: record.primaryProduct || "deal_hunter",
     tags: sanitizeTags(record.tags || []),
@@ -2061,6 +2611,7 @@ function buildProgrammaticCandidates(programmaticLibrary) {
       {
         id: `programmatic-brand-review-${brandSlug}`,
         layer: "controlled_programmatic",
+        lifecycleStage: "evaluation",
         cluster: "brand-review",
         primaryProduct: "brand_analyze",
         intentType: "review",
@@ -2087,6 +2638,7 @@ function buildProgrammaticCandidates(programmaticLibrary) {
       {
         id: `programmatic-brand-fit-${brandSlug}`,
         layer: "controlled_programmatic",
+        lifecycleStage: "evaluation",
         cluster: "brand-fit",
         primaryProduct: "brand_analyze",
         intentType: "framework",
@@ -2116,6 +2668,7 @@ function buildProgrammaticCandidates(programmaticLibrary) {
   const emailCandidates = (programmaticLibrary.emailScenarios || []).map((scenario) => ({
     ...scenario,
     layer: "controlled_programmatic",
+    lifecycleStage: scenario.lifecycleStage || "evaluation",
     cluster: "email-patterns",
     priority: 0.87,
     sourceType: "email_pattern",
@@ -2128,6 +2681,7 @@ function buildProgrammaticCandidates(programmaticLibrary) {
   const creatorCandidates = (programmaticLibrary.creatorScenarios || []).map((scenario) => ({
     id: `programmatic-creator-${scenario.id}`,
     layer: "controlled_programmatic",
+    lifecycleStage: scenario.lifecycleStage || "discovery",
     cluster: "creator-scenarios",
     primaryProduct: scenario.primaryProduct || "deal_hunter",
     intentType: "scenario",
@@ -2182,6 +2736,120 @@ function computeLayerStats(recentEntries) {
   return counts;
 }
 
+function inferLifecycleStage(candidate) {
+  if (candidate.lifecycleStage) return candidate.lifecycleStage;
+
+  if (
+    candidate.cluster === "creator-readiness"
+    || candidate.seedTopic?.toLowerCase().includes("profile")
+    || candidate.seedTopic?.toLowerCase().includes("rate baseline")
+  ) {
+    return "readiness";
+  }
+
+  if (
+    candidate.cluster === "deal-discovery"
+    || candidate.templateType === "category_roundup"
+    || candidate.seedTopic?.toLowerCase().includes("shortlist")
+    || candidate.seedTopic?.toLowerCase().includes("prioritize")
+    || candidate.seedTopic?.toLowerCase().includes("worth applying")
+  ) {
+    return "discovery";
+  }
+
+  if (
+    candidate.cluster === "deal-execution"
+    || candidate.seedTopic?.toLowerCase().includes("reviewing")
+    || candidate.seedTopic?.toLowerCase().includes("negotiat")
+    || candidate.seedTopic?.toLowerCase().includes("reply")
+    || candidate.seedTopic?.toLowerCase().includes("imported sponsorship email")
+  ) {
+    return "execution";
+  }
+
+  if (
+    candidate.cluster === "creator-optimization"
+    || candidate.seedTopic?.toLowerCase().includes("ignored")
+    || candidate.seedTopic?.toLowerCase().includes("fix the pattern")
+  ) {
+    return "optimization";
+  }
+
+  return "evaluation";
+}
+
+function inferSupportedProducts(candidate) {
+  const seed = new Set([candidate.primaryProduct || "deal_hunter"]);
+  const secondaryProducts = selectSecondaryProducts(candidate.primaryProduct, candidate);
+  for (const productKey of secondaryProducts || []) {
+    seed.add(productKey);
+  }
+  return [...seed];
+}
+
+function computeLifecycleStats(recentEntries, scoringRules) {
+  const targets = scoringRules.lifecycleTargets || {};
+  const counts = Object.fromEntries(Object.keys(targets).map((key) => [key, 0]));
+  for (const entry of recentEntries) {
+    const lifecycleStage = entry.lifecycleStage || inferLifecycleStage(entry);
+    if (counts[lifecycleStage] !== undefined) counts[lifecycleStage] += 1;
+  }
+  return counts;
+}
+
+function computeLifecycleGap(candidate, recentEntries, scoringRules) {
+  const stage = inferLifecycleStage(candidate);
+  const targets = scoringRules.lifecycleTargets || {};
+  const target = Number(targets[stage] || 0.18);
+  const counts = computeLifecycleStats(recentEntries, scoringRules);
+  const total = recentEntries.length || 0;
+  const actual = total ? Number(counts[stage] || 0) / total : 0;
+  return clamp(0.5 + Math.max(0, target - actual));
+}
+
+function computeProductSurfaceDepth(candidate) {
+  const supportedProducts = candidate.supportedProducts?.length
+    ? candidate.supportedProducts
+    : inferSupportedProducts(candidate);
+  return clamp(0.45 + supportedProducts.length * 0.18);
+}
+
+function computeStateTransitionValue(candidate) {
+  if (typeof candidate.stateTransitionValue === "number") {
+    return clamp(candidate.stateTransitionValue);
+  }
+
+  const lifecycleStage = inferLifecycleStage(candidate);
+  const intentType = String(candidate.intentType || "");
+
+  if (lifecycleStage === "discovery") {
+    return clamp(intentType === "workflow" ? 0.92 : 0.86);
+  }
+  if (lifecycleStage === "evaluation") {
+    return clamp(["framework", "checklist", "review", "red-flags"].includes(intentType) ? 0.94 : 0.88);
+  }
+  if (lifecycleStage === "execution") {
+    return clamp(intentType === "workflow" ? 0.9 : 0.82);
+  }
+  if (lifecycleStage === "optimization") {
+    return 0.84;
+  }
+  return 0.78;
+}
+
+function computeDealSupplyFit(candidate) {
+  if (typeof candidate.dealSupplyFit === "number") {
+    return clamp(candidate.dealSupplyFit);
+  }
+  if (candidate.sourceType === "deal_board_category") {
+    return 0.88;
+  }
+  if (candidate.sourceType === "deal_board_spotlight") {
+    return 0.92;
+  }
+  return 0.38;
+}
+
 function selectLayer({ args, scoringRules, publishLog, seed }) {
   if (args.layer && LAYER_DEFINITIONS[args.layer]) {
     logStep("TOPIC", "Using manual layer override", {
@@ -2223,6 +2891,10 @@ function normalizeForScoring(candidate) {
     ...candidate,
     intentType: candidate.intentType || "workflow",
     priority: Number(candidate.priority || 0.7),
+    lifecycleStage: inferLifecycleStage(candidate),
+    supportedProducts: candidate.supportedProducts?.length
+      ? candidate.supportedProducts
+      : inferSupportedProducts(candidate),
   };
 }
 
@@ -2276,6 +2948,10 @@ function scoreCandidate({
       + (candidate.primaryProduct === "deal_hunter" ? 0.03 : 0),
   );
   const topicalGap = computeClusterGap(candidate, recentEntries);
+  const workflowCoverage = computeLifecycleGap(candidate, recentEntries, scoringRules);
+  const productSurfaceDepth = computeProductSurfaceDepth(candidate);
+  const stateTransitionValue = computeStateTransitionValue(candidate);
+  const dealSupplyFit = computeDealSupplyFit(candidate);
   const cannibalizationRisk = computeCannibalizationRisk(candidate, existingPosts, publishLog);
   const total =
     businessFit * Number(weights.businessFit || 0)
@@ -2284,6 +2960,10 @@ function scoreCandidate({
     + topicalGap * Number(weights.topicalGap || 0)
     + freshness * Number(weights.freshness || 0)
     + priorityScore * Number(weights.priority || 0)
+    + workflowCoverage * Number(weights.workflowCoverage || 0)
+    + productSurfaceDepth * Number(weights.productSurfaceDepth || 0)
+    + stateTransitionValue * Number(weights.stateTransitionValue || 0)
+    + dealSupplyFit * Number(weights.dealSupplyFit || 0)
     - cannibalizationRisk * Number(weights.cannibalizationRisk || 0);
 
   return {
@@ -2295,6 +2975,10 @@ function scoreCandidate({
       topicalGap,
       freshness,
       priorityScore,
+      workflowCoverage,
+      productSurfaceDepth,
+      stateTransitionValue,
+      dealSupplyFit,
       cannibalizationRisk,
     },
   };
@@ -2367,6 +3051,7 @@ function buildManualCandidate(topic, product = "deal_hunter") {
     id: `manual-${slugify(topic)}`,
     topicKey: `manual:${slugify(topic)}`,
     layer: "core_editorial",
+    lifecycleStage: "evaluation",
     cluster: "manual",
     primaryProduct: product,
     intentType: "workflow",
@@ -2387,6 +3072,7 @@ function selectCandidate({
   dateString,
   searchConsoleCandidates = [],
   trendCandidates = [],
+  dealBoardCandidates = [],
 }) {
   const recentEntries = getRecentPublishWindow(
     publishLog,
@@ -2414,7 +3100,11 @@ function selectCandidate({
   }
 
   const candidatePool = dedupeCandidates(
-    buildCandidatePool(configBundle, args, [...searchConsoleCandidates, ...trendCandidates]),
+    buildCandidatePool(configBundle, args, [
+      ...searchConsoleCandidates,
+      ...trendCandidates,
+      ...dealBoardCandidates,
+    ]),
     manifest.posts || [],
     publishLog,
   );
@@ -2465,6 +3155,7 @@ function selectCandidate({
   logStep("TOPIC", "Selected candidate", {
     id: candidate.id,
     layer: candidate.layer,
+    lifecycleStage: candidate.lifecycleStage || inferLifecycleStage(candidate),
     score: candidate.score,
     product: candidate.primaryProduct,
     sourceType: candidate.sourceType || "library",
@@ -2477,6 +3168,7 @@ function selectCandidate({
     rankedPreview: rankedCandidates.slice(0, 8).map((item) => ({
       id: item.id,
       layer: item.layer,
+      lifecycleStage: item.lifecycleStage || inferLifecycleStage(item),
       score: item.score,
       seedTopic: item.seedTopic,
       primaryProduct: item.primaryProduct,
@@ -2583,6 +3275,37 @@ function buildToolSectionMarkdown({
   return sections.join("\n");
 }
 
+function buildLiveOpportunitiesMarkdown(candidate) {
+  const signal = candidate.dealBoardSignal;
+  if (!signal) return "";
+
+  const lines = ["## Live Opportunities Mentioned", ""];
+
+  if (signal.type === "category_roundup") {
+    if (signal.categoryUrl && signal.categoryLabel) {
+      lines.push(`- [Browse all ${signal.categoryLabel} deals](${signal.categoryUrl})`);
+    }
+    for (const deal of signal.highlightedDeals || []) {
+      if (!deal.pageUrl) continue;
+      const snippet = [deal.compensationSummary, deal.platforms?.join("/"), deal.followerMin ? `${deal.followerMin}+ followers` : "open follower range"]
+        .filter(Boolean)
+        .join(" · ");
+      lines.push(`- [${deal.title}](${deal.pageUrl})${snippet ? ` — ${snippet}` : ""}`);
+    }
+  }
+
+  if (signal.type === "deal_spotlight") {
+    if (signal.detailPageUrl) {
+      lines.push(`- [Open the featured deal](${signal.detailPageUrl})`);
+    }
+    if (signal.categoryUrl && signal.categoryLabel) {
+      lines.push(`- [Browse more ${signal.categoryLabel} deals](${signal.categoryUrl})`);
+    }
+  }
+
+  return lines.length > 2 ? lines.join("\n") : "";
+}
+
 function scoreRelatedPost(post, candidate) {
   return overlapRatio(buildCandidateText(candidate), `${post.title} ${(post.tags || []).join(" ")}`);
 }
@@ -2642,10 +3365,14 @@ function buildPromptContext(candidate, internalLinkingRules, queryRules) {
   return {
     layer: candidate.layer,
     layerLabel: LAYER_DEFINITIONS[candidate.layer]?.label || candidate.layer,
+    lifecycleStage: candidate.lifecycleStage || inferLifecycleStage(candidate),
     audience: candidate.audience,
     angle: candidate.angle,
     cluster: candidate.cluster,
     primaryProduct: candidate.primaryProduct,
+    supportedProducts: candidate.supportedProducts?.length
+      ? candidate.supportedProducts
+      : inferSupportedProducts(candidate),
     primaryProductName: product.name,
     primaryProductUrl: primaryProductLink?.url || "",
     productSummary: product.summary,
@@ -2655,6 +3382,7 @@ function buildPromptContext(candidate, internalLinkingRules, queryRules) {
     legacyBlacklist: queryRules.legacyTerms || [],
     templateType: candidate.templateType || candidate.sourceType || candidate.layer,
     trendSignal: candidate.trendSignal || null,
+    dealBoardSignal: candidate.dealBoardSignal || null,
   };
 }
 
@@ -2683,6 +3411,41 @@ function buildDraftPrompt({
     : "";
   const scenarioContext = candidate.niche
     ? `Scenario context: ${toSentenceCase(candidate.niche)} creators on ${candidate.platform} with ${candidate.followerTier}.`
+    : "";
+  const dealBoardContext = promptContext.dealBoardSignal
+    ? (() => {
+        const signal = promptContext.dealBoardSignal;
+        if (signal.type === "category_roundup") {
+          const dealLines = (signal.highlightedDealDetails || signal.highlightedDeals || [])
+            .slice(0, 4)
+            .map((deal) => {
+              const title = deal.campaignTitle || deal.title;
+              const comp = deal.compensationSummary || formatCompensationSnippet(deal);
+              const platforms = uniqueStrings(deal.platforms || []).join(", ");
+              return `- ${title}${comp ? ` | ${comp}` : ""}${platforms ? ` | ${platforms}` : ""}`;
+            });
+          return [
+            `Live deal-board category: ${signal.categoryLabel}`,
+            `Current category count: ${signal.categoryCount}`,
+            signal.lowBarrierCount ? `Low-barrier deals in this category: ${signal.lowBarrierCount}` : "",
+            dealLines.length ? `Highlighted live deals:\n${dealLines.join("\n")}` : "",
+            "Treat the article as a curated shortlist plus decision framework, not a generic market overview.",
+          ].filter(Boolean).join("\n");
+        }
+
+        const detail = signal.detail || null;
+        const highlighted = signal.highlightedDeals?.[0] || {};
+        return [
+          `Featured live campaign: ${detail?.campaignTitle || highlighted.title || ""}`,
+          `Brand: ${detail?.brandName || highlighted.brandName || "Unknown"}`,
+          `Compensation: ${detail?.compensationSummary || signal.compensationSummary || highlighted.compensationSummary || ""}`,
+          `Platforms: ${uniqueStrings(detail?.platforms || signal.platforms || highlighted.platforms || []).join(", ")}`,
+          detail?.fansNumMin || signal.followersMin ? `Follower threshold: ${detail?.fansNumMin || signal.followersMin}+` : "",
+          detail?.campaignEndDate || signal.endDate ? `Deadline: ${detail?.campaignEndDate || signal.endDate}` : "",
+          detail?.requirements?.length ? `Requirements summary:\n${detail.requirements.map((item) => `- ${item.title}: ${item.description}`).join("\n")}` : "",
+          "Treat the article as a creator-side evaluation breakdown. Explain fit, upside, hidden friction, and who should pass.",
+        ].filter(Boolean).join("\n");
+      })()
     : "";
   const trendContext = promptContext.trendSignal
     ? [
@@ -2729,15 +3492,18 @@ function buildDraftPrompt({
     "- Use short paragraphs and varied sentence length.",
     "",
     `Selected layer: ${promptContext.layerLabel}`,
+    `Creator workflow stage: ${promptContext.lifecycleStage}`,
     `Template type: ${templateProfile?.briefLabel || promptContext.templateType}`,
     `Audience: ${promptContext.audience}`,
     `Cluster: ${promptContext.cluster}`,
     `Core topic: ${candidate.seedTopic}`,
     `Primary angle: ${candidate.angle}`,
     `Primary product to support naturally: ${promptContext.primaryProductName}`,
+    `Supporting surfaces when relevant: ${promptContext.supportedProducts.join(", ")}`,
     "",
     brandContext,
     scenarioContext,
+    dealBoardContext,
     trendContext,
     templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
@@ -2946,8 +3712,9 @@ function enrichMarkdown({
     currentSlug: slug,
     internalLinkingRules,
   });
+  const liveOpportunities = buildLiveOpportunitiesMarkdown(candidate);
 
-  const markdown = appendMarkdownSections(draft.markdown, [toolSection, relatedReading]);
+  const markdown = appendMarkdownSections(draft.markdown, [toolSection, liveOpportunities, relatedReading]);
   return {
     markdown,
     ctaStyle,
@@ -2969,6 +3736,7 @@ function buildPublishLogEntry({
     slug,
     title: draft.title,
     layer: candidate.layer,
+    lifecycleStage: candidate.lifecycleStage || inferLifecycleStage(candidate),
     cluster: candidate.cluster,
     topicKey: candidate.topicKey,
     topicId: candidate.id,
@@ -2998,6 +3766,7 @@ function buildTopicLedgerEntry({
       id: candidate.id,
       topicKey: candidate.topicKey,
       layer: candidate.layer,
+      lifecycleStage: candidate.lifecycleStage || inferLifecycleStage(candidate),
       cluster: candidate.cluster,
       topic: candidate.seedTopic,
       primaryProduct: candidate.primaryProduct,
@@ -3019,6 +3788,7 @@ async function main() {
     timeZone: getEnv("BLOG_TIMEZONE", DEFAULT_TIMEZONE),
     sequenceNumber: 0,
     layer: "",
+    lifecycleStage: "",
     sourceType: "",
     primaryProduct: "",
     title: "",
@@ -3032,6 +3802,7 @@ async function main() {
     ctaStyle: "",
     searchConsoleCandidateCount: 0,
     trendCandidateCount: 0,
+    dealBoardCandidateCount: 0,
     errorMessage: "",
     failedStep: "",
     failedStepLabel: "",
@@ -3050,7 +3821,7 @@ async function main() {
   try {
     await loadLocalEnvFiles();
     const configBundle = await loadV1ConfigBundle();
-    logStep("CONFIG", "Loaded V1 content configuration", {
+    logStep("CONFIG", "Loaded V4 content configuration", {
       topicCounts: {
         coreEditorial: configBundle.topicLibrary.coreEditorial?.length || 0,
         toolProblem: configBundle.topicLibrary.toolProblem?.length || 0,
@@ -3058,6 +3829,7 @@ async function main() {
         brands: configBundle.programmaticLibrary.brands?.length || 0,
         emailScenarios: configBundle.programmaticLibrary.emailScenarios?.length || 0,
         creatorScenarios: configBundle.programmaticLibrary.creatorScenarios?.length || 0,
+        dealCategories: configBundle.dealCategoryMap?.length || 0,
       },
     });
 
@@ -3094,6 +3866,7 @@ async function main() {
       hasGnewsApiKey: Boolean(getEnv("BLOG_GNEWS_API_KEY")),
       hasDingTalkWebhook: Boolean(dingTalkWebhook),
       hasDingTalkSecret: Boolean(dingTalkSecret),
+      dealSourceBaseApi: getDealBoardBaseApi(configBundle.dealBoardRules),
     });
 
     const publicOssBaseUrl = buildPublicOssBaseUrl(ossBucket, ossEndpoint);
@@ -3153,6 +3926,30 @@ async function main() {
         })),
       });
     }
+    const dealBoardContext = await getDealBoardContext({
+      configBundle,
+      siteBaseUrl,
+      dateString: date,
+      timeZone,
+    });
+    runState.dealBoardCandidateCount = dealBoardContext.candidates?.length || 0;
+    logStep("DEAL_BOARD", "Resolved live deal supply signals", {
+      ok: dealBoardContext.ok,
+      reason: dealBoardContext.reason || "",
+      rows: dealBoardContext.rows?.length || 0,
+      categoryCandidates: dealBoardContext.categoryCandidates?.length || 0,
+      spotlightCandidates: dealBoardContext.spotlightCandidates?.length || 0,
+    });
+    if (dealBoardContext.ok && dealBoardContext.candidates?.length) {
+      logStep("DEAL_BOARD", "Top live deal candidates", {
+        topics: dealBoardContext.candidates.slice(0, 5).map((item) => ({
+          seedTopic: item.seedTopic,
+          sourceType: item.sourceType,
+          lifecycleStage: item.lifecycleStage,
+          product: item.primaryProduct,
+        })),
+      });
+    }
 
     if (!aiApiKey) {
       throw new Error("Missing BLOG_AI_API_KEY.");
@@ -3168,14 +3965,22 @@ async function main() {
       dateString: date,
       searchConsoleCandidates: searchConsoleContext.ok ? searchConsoleContext.candidates : [],
       trendCandidates: trendContext.ok ? trendContext.candidates : [],
+      dealBoardCandidates: dealBoardContext.ok ? dealBoardContext.candidates : [],
     });
-    const candidate = selection.candidate;
+    let candidate = selection.candidate;
+    candidate = await hydrateDealBoardCandidate(
+      candidate,
+      configBundle.dealBoardRules,
+      siteBaseUrl,
+    );
     const templateProfile = getTemplateProfile(configBundle.programmaticLibrary, candidate);
     runState.layer = candidate.layer;
+    runState.lifecycleStage = candidate.lifecycleStage || inferLifecycleStage(candidate);
     runState.sourceType = candidate.sourceType || "library";
     runState.primaryProduct = candidate.primaryProduct;
     stepTracker.success("TOPIC_SELECTION", {
       layer: candidate.layer,
+      lifecycleStage: runState.lifecycleStage,
       sourceType: candidate.sourceType || "library",
       product: candidate.primaryProduct,
     });

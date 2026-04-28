@@ -43,6 +43,28 @@
         "which deals tend to be worth the time",
         "how to protect audience trust while still growing revenue"
       ]
+    },
+    "category_roundup": {
+      "templateType": "category_roundup",
+      "headlineStyle": "roundup",
+      "briefLabel": "Category roundup",
+      "sectionGoals": [
+        "which live deals in this category are worth a closer look right now",
+        "what separates high-fit opportunities from noisy listings",
+        "which creators are most likely to benefit from this category mix",
+        "how to move from browsing to a real shortlist without wasting time"
+      ]
+    },
+    "deal_spotlight": {
+      "templateType": "deal_spotlight",
+      "headlineStyle": "spotlight",
+      "briefLabel": "Deal spotlight",
+      "sectionGoals": [
+        "why this specific campaign stands out in the current deal board",
+        "what the compensation, workload, and timing really mean",
+        "who should apply, who should pass, and what to check first",
+        "how this deal fits into a wider creator workflow rather than a one-off win"
+      ]
     }
   },
   "brands": [
