@@ -162,6 +162,210 @@ const PRODUCT_CONTEXT = {
 
 const CTA_STYLE_ORDER = ["soft", "weak", "strong"];
 
+const COVER_STYLE_PROFILES = {
+  core_editorial: {
+    styleKey: "core_editorial",
+    label: "Editorial workspace",
+    direction:
+      "A thoughtful editorial scene that feels like a creator or strategist is actively reviewing sponsorship decisions.",
+    composition:
+      "Use a clean desk or studio composition with depth, natural asymmetry, and one clear focal point rather than a perfectly centered product shot.",
+    palette:
+      "Neutral and grounded colors such as warm whites, soft grays, charcoal, muted wood tones, and one restrained accent color.",
+    motifs: [
+      "structured notes",
+      "research materials",
+      "creator workspace",
+      "subtle decision-making atmosphere",
+    ],
+    avoid: [
+      "generic stock office look",
+      "social-media icon clutter",
+      "fake UI panels",
+      "overly glossy startup illustration style",
+    ],
+  },
+  tool_problem: {
+    styleKey: "tool_problem",
+    label: "Focused analytical review",
+    direction:
+      "A more task-oriented image showing close review, triage, or analysis around a creator deal decision.",
+    composition:
+      "Frame a tighter scene with documents, a laptop, marked-up notes, or a creator reviewing details in a focused way.",
+    palette:
+      "Cooler neutrals with soft blue-gray accents, keeping the overall scene calm, sharp, and practical.",
+    motifs: [
+      "brief review",
+      "email triage",
+      "brand research notes",
+      "decision support",
+    ],
+    avoid: [
+      "futuristic HUD interfaces",
+      "cyberpunk glow",
+      "fake dashboards",
+      "busy split-screen collage",
+    ],
+  },
+  controlled_programmatic: {
+    styleKey: "controlled_programmatic",
+    label: "Structured creator opportunity scene",
+    direction:
+      "A practical creator-opportunity visual with slightly more context and specificity than the evergreen editorial layer.",
+    composition:
+      "Use strong context cues and a recognizable creator-workflow scene, while still keeping the image polished and uncluttered.",
+    palette:
+      "Balanced neutrals with one or two category-appropriate accent colors.",
+    motifs: [
+      "campaign evaluation",
+      "creator workflow",
+      "product or niche context",
+      "decision moment",
+    ],
+    avoid: [
+      "random lifestyle stock photo",
+      "flat abstract gradient only",
+      "generic coworking office scene",
+      "heavy sales-banner feel",
+    ],
+  },
+  trend_linked: {
+    styleKey: "trend_linked",
+    label: "Timely creator-economy update",
+    direction:
+      "A timely image that suggests change, movement, or pressure in the creator economy without looking like a news banner.",
+    composition:
+      "Use layered visual depth, motion cues, or a subtle sense of urgency while keeping one dominant subject or scene.",
+    palette:
+      "Slightly higher contrast than other layers, with controlled blues, oranges, reds, or dark neutrals used sparingly.",
+    motifs: [
+      "platform change",
+      "market shift",
+      "creator economy tension",
+      "sponsorship risk or update context",
+    ],
+    avoid: [
+      "breaking-news broadcast graphics",
+      "large alert symbols",
+      "headline banner layouts",
+      "sensational clickbait imagery",
+    ],
+  },
+};
+
+const CONTROLLED_PROGRAMMATIC_COVER_STYLES = {
+  brand_review: {
+    styleKey: "brand_review",
+    label: "Brand review still life",
+    direction:
+      "A category-aware brand evaluation visual that feels like a creator is assessing whether a brand fits their audience and workflow.",
+    composition:
+      "Use tactile category objects or a refined product-context still life rather than a generic workspace, and let the scene imply review and fit judgment.",
+    palette:
+      "Category-aware but restrained: polished, premium, and never loud.",
+    motifs: [
+      "brand category cues",
+      "creator fit research",
+      "product texture",
+      "reputation review mood",
+    ],
+    avoid: [
+      "visible brand logos",
+      "e-commerce product grid",
+      "unboxing thumbnail style",
+      "direct ad creative look",
+    ],
+  },
+  email_pattern: {
+    styleKey: "email_pattern",
+    label: "Inbox triage scene",
+    direction:
+      "A creator-side outreach review scene centered on inbox triage, hidden asks, and decision-making under uncertainty.",
+    composition:
+      "Focus on a desk, notebook, printouts, or a laptop in a close analytical setup that implies someone is reading between the lines of a deal email.",
+    palette:
+      "Cool neutrals with subtle off-white paper textures and restrained accent colors.",
+    motifs: [
+      "annotated notes",
+      "creator inbox review",
+      "deal qualification",
+      "hidden workload signals",
+    ],
+    avoid: [
+      "literal email app screenshots",
+      "floating mail icons",
+      "marketing stock handshake imagery",
+      "cartoon scam visuals",
+    ],
+  },
+  creator_scenario: {
+    styleKey: "creator_scenario",
+    label: "Niche creator environment",
+    direction:
+      "A creator environment specific to a niche, platform, or audience tier, showing how deal decisions live inside a real content workflow.",
+    composition:
+      "Use a realistic creator setup or production environment that reflects the niche and platform without becoming a staged influencer portrait.",
+    palette:
+      "Adapt to the niche while keeping the overall scene clean and editorial.",
+    motifs: [
+      "platform-native setup",
+      "creator production environment",
+      "niche-specific props",
+      "audience-trust atmosphere",
+    ],
+    avoid: [
+      "selfie-style influencer pose",
+      "generic smiling portrait",
+      "ring-light cliche",
+      "thumbnail-face expression style",
+    ],
+  },
+  category_roundup: {
+    styleKey: "category_roundup",
+    label: "Curated opportunity roundup",
+    direction:
+      "A curated creator-opportunity visual that suggests scanning and shortlisting multiple live deals in one niche or category.",
+    composition:
+      "Show a richer scene with category cues, shortlist energy, and several subtle opportunity signals, but avoid anything that looks like an actual UI board.",
+    palette:
+      "Use a broader but controlled palette that reflects the category and feels active without looking noisy.",
+    motifs: [
+      "opportunity curation",
+      "shortlist building",
+      "category-specific products or props",
+      "creator browsing and filtering mood",
+    ],
+    avoid: [
+      "kanban board UI",
+      "coupon flyer feeling",
+      "shopping-catalog layout",
+      "collage of many small disconnected objects",
+    ],
+  },
+  deal_spotlight: {
+    styleKey: "deal_spotlight",
+    label: "Featured campaign decision",
+    direction:
+      "A high-intent creator decision moment centered on one standout campaign and the practical tradeoffs behind it.",
+    composition:
+      "Use a tighter focal composition that suggests one featured brief, one decision, and one clear question of fit, timing, or payoff.",
+    palette:
+      "Slightly bolder contrast than general editorial, but still polished and premium.",
+    motifs: [
+      "featured campaign brief",
+      "deadline pressure",
+      "compensation versus workload",
+      "apply-or-pass judgment",
+    ],
+    avoid: [
+      "celebratory jackpot imagery",
+      "cash explosion metaphors",
+      "app notification graphics",
+      "flashy affiliate-banner style",
+    ],
+  },
+};
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const automationRoot = path.resolve(scriptDir, "..");
 const defaultProjectRoot = path.resolve(automationRoot, "../..");
@@ -3475,10 +3679,83 @@ function getTemplateProfile(programmaticLibrary, candidate) {
   return null;
 }
 
+function getControlledProgrammaticStyleKey(candidate) {
+  const templateType = String(candidate.templateType || "").trim();
+  if (templateType === "brand_fit") return "brand_review";
+  if (CONTROLLED_PROGRAMMATIC_COVER_STYLES[templateType]) return templateType;
+  return "creator_scenario";
+}
+
+function getCoverStyleProfile(candidate) {
+  const layerKey = String(candidate.layer || "").trim();
+  if (layerKey === "controlled_programmatic") {
+    const styleKey = getControlledProgrammaticStyleKey(candidate);
+    return {
+      ...COVER_STYLE_PROFILES.controlled_programmatic,
+      ...CONTROLLED_PROGRAMMATIC_COVER_STYLES[styleKey],
+    };
+  }
+
+  return COVER_STYLE_PROFILES[layerKey] || COVER_STYLE_PROFILES.core_editorial;
+}
+
+function buildCoverStyleGuidance(candidate, styleProfile) {
+  const extraMotifs = [];
+
+  if (candidate.brandName) extraMotifs.push(`${candidate.brandName} brand context without showing logos`);
+  if (candidate.categoryLabel) extraMotifs.push(`${candidate.categoryLabel} category cues`);
+  if (candidate.niche) extraMotifs.push(`${candidate.niche} creator environment`);
+  if (candidate.platform) extraMotifs.push(`${candidate.platform}-native production mood`);
+  if (candidate.dealBoardSignal?.type === "category_roundup" && candidate.dealBoardSignal?.categoryLabel) {
+    extraMotifs.push(`${candidate.dealBoardSignal.categoryLabel} opportunity roundup context`);
+  }
+  if (candidate.dealBoardSignal?.type === "deal_spotlight") {
+    extraMotifs.push("single featured campaign decision energy");
+  }
+
+  const motifs = uniqueStrings([...(styleProfile.motifs || []), ...extraMotifs]);
+
+  return [
+    `Cover style label: ${styleProfile.label}.`,
+    `Cover art direction: ${styleProfile.direction}`,
+    `Composition guidance: ${styleProfile.composition}`,
+    `Palette guidance: ${styleProfile.palette}`,
+    motifs.length ? `Motifs to include naturally: ${motifs.join(", ")}.` : "",
+    styleProfile.avoid?.length ? `Avoid these visual patterns: ${styleProfile.avoid.join("; ")}.` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function composeCoverImagePrompt({ candidate, promptContext, styleProfile, modelPrompt }) {
+  const topicLine = candidate.seedTopic
+    ? `Article topic: ${candidate.seedTopic}.`
+    : "";
+  const lifecycleLine = promptContext?.lifecycleStage
+    ? `Creator workflow stage: ${promptContext.lifecycleStage}.`
+    : "";
+  const audienceLine = candidate.audience
+    ? `Audience context: ${candidate.audience}.`
+    : "";
+
+  return [
+    `Visual system style: ${styleProfile.label}.`,
+    `Use this direction: ${styleProfile.direction}`,
+    `Composition: ${styleProfile.composition}`,
+    `Palette: ${styleProfile.palette}`,
+    styleProfile.avoid?.length ? `Do not include: ${styleProfile.avoid.join(", ")}.` : "",
+    topicLine,
+    lifecycleLine,
+    audienceLine,
+    "Keep the image realistic or editorially stylized, not illustrative UI art.",
+    "Do not render any visible text, typography, logos, watermarks, app chrome, or dashboard interfaces.",
+    String(modelPrompt || "").trim(),
+  ].filter(Boolean).join("\n");
+}
+
 function buildPromptContext(candidate, internalLinkingRules, queryRules) {
   const product = PRODUCT_CONTEXT[candidate.primaryProduct] || PRODUCT_CONTEXT.deal_hunter;
   const productLinks = internalLinkingRules.products || {};
   const primaryProductLink = productLinks[candidate.primaryProduct];
+  const coverStyleProfile = getCoverStyleProfile(candidate);
 
   return {
     layer: candidate.layer,
@@ -3502,6 +3779,7 @@ function buildPromptContext(candidate, internalLinkingRules, queryRules) {
     trendSignal: candidate.trendSignal || null,
     dealBoardSignal: candidate.dealBoardSignal || null,
     targetLandingPages: uniqueStrings(candidate.targetLandingPages || []),
+    coverStyleProfile,
   };
 }
 
@@ -3580,6 +3858,9 @@ function buildDraftPrompt({
         "Use this only as timely context. Do not rewrite it like a news recap and do not invent unsupported facts.",
       ].filter(Boolean).join("\n")
     : "";
+  const coverStyleContext = promptContext.coverStyleProfile
+    ? buildCoverStyleGuidance(candidate, promptContext.coverStyleProfile)
+    : "";
 
   return [
     "You are writing a production blog post for the CollabGrow website.",
@@ -3596,7 +3877,7 @@ function buildDraftPrompt({
     '  "seoTitle": "string under 70 characters",',
     '  "seoDescription": "string under 180 characters",',
     '  "tags": ["3 to 6 lowercase tags"],',
-    '  "imagePrompt": "single paragraph for a 1200x630 editorial hero image with no text, no UI, no watermark",',
+    '  "imagePrompt": "single paragraph for a 1200x630 cover image prompt that follows the visual direction below, with no text, no UI, and no watermark",',
     '  "markdown": "full markdown article between 1000 and 1500 words"',
     "}",
     "",
@@ -3612,6 +3893,7 @@ function buildDraftPrompt({
     "- Keep the prose natural. Do not sound like a template, a sales page, or an SEO content farm article.",
     "- Prefer specific decision criteria, tradeoffs, and examples over motivational filler.",
     "- Use short paragraphs and varied sentence length.",
+    "- The imagePrompt should match the cover style guidance below rather than defaulting to the same generic workspace image every time.",
     "",
     `Selected layer: ${promptContext.layerLabel}`,
     `Creator workflow stage: ${promptContext.lifecycleStage}`,
@@ -3628,6 +3910,7 @@ function buildDraftPrompt({
     dealBoardContext,
     landingPageContext,
     trendContext,
+    coverStyleContext,
     templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
     "",
@@ -3749,6 +4032,12 @@ async function generateBlogDraft({
     seoTitle,
     seoDescription,
     imagePrompt,
+    finalImagePrompt: composeCoverImagePrompt({
+      candidate,
+      promptContext,
+      styleProfile: promptContext.coverStyleProfile,
+      modelPrompt: imagePrompt,
+    }),
     markdown: rawMarkdown,
     tags: mergedTags,
     promptContext,
@@ -3774,6 +4063,7 @@ async function generateCoverImage({ prompt, apiKey, baseUrl, model }) {
                 "Generate a single polished editorial cover image.",
                 "Aspect ratio: 1200x630.",
                 "No text, no logo, no watermark, no collage, no UI screenshot.",
+                "Keep the scene visually coherent and premium, with one strong focal idea rather than many competing objects.",
                 prompt,
               ].join("\n"),
             },
@@ -4162,7 +4452,7 @@ async function main() {
 
     stepTracker.start("AI_IMAGE");
     const imageAsset = await generateCoverImage({
-      prompt: draft.imagePrompt,
+      prompt: draft.finalImagePrompt || draft.imagePrompt,
       apiKey: aiApiKey,
       baseUrl: aiBaseUrl,
       model: imageModel,
