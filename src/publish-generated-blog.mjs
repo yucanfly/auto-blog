@@ -935,8 +935,10 @@ async function repairJsonPayload({ rawText, apiKey, baseUrl, model }) {
     "Expected fields:",
     "{",
     '  "title": "string",',
+    '  "titleCandidates": [{"title":"string","style":"string"}],',
     '  "description": "string",',
     '  "seoTitle": "string",',
+    '  "seoTitleCandidates": [{"title":"string","style":"string"}],',
     '  "seoDescription": "string",',
     '  "tags": ["array of lowercase strings"],',
     '  "imagePrompt": "string",',
@@ -1228,6 +1230,305 @@ function summarizeRecentPosts(posts, count = 12) {
   }));
 }
 
+function collectRecentHeadlineHistory({ manifest, publishLog, limit = 15 }) {
+  const manifestTitles = (manifest?.posts || []).map((post) => ({
+    title: String(post.title || "").trim(),
+    seoTitle: String(post.seo?.title || "").trim(),
+    publishedAt: post.updatedAt || post.date || "",
+    lifecycleStage: "",
+    templateType: "",
+  }));
+  const logTitles = (publishLog || []).map((entry) => ({
+    title: String(entry.title || "").trim(),
+    seoTitle: String(entry.seoTitle || "").trim(),
+    publishedAt: entry.publishedAt || entry.publishDate || "",
+    lifecycleStage: entry.lifecycleStage || "",
+    templateType: entry.templateType || "",
+  }));
+
+  return [...manifestTitles, ...logTitles]
+    .filter((item) => item.title || item.seoTitle)
+    .sort((left, right) => new Date(right.publishedAt || 0).getTime() - new Date(left.publishedAt || 0).getTime())
+    .slice(0, Number(limit || 15));
+}
+
+function normalizeHeadlineCandidate(rawCandidate) {
+  if (!rawCandidate) return null;
+  if (typeof rawCandidate === "string") {
+    const title = rawCandidate.trim();
+    return title ? { title, style: "" } : null;
+  }
+
+  const title = String(rawCandidate.title || rawCandidate.headline || rawCandidate.value || "").trim();
+  if (!title) return null;
+  return {
+    title,
+    style: String(rawCandidate.style || rawCandidate.type || "").trim().toLowerCase(),
+  };
+}
+
+function uniqueHeadlineCandidates(candidates) {
+  const seen = new Set();
+  const normalized = [];
+
+  for (const rawCandidate of candidates || []) {
+    const candidate = normalizeHeadlineCandidate(rawCandidate);
+    if (!candidate) continue;
+    const key = candidate.title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(candidate);
+  }
+
+  return normalized;
+}
+
+function inferPreferredHeadlineStyles(candidate, headlineRules) {
+  const templateStyles = headlineRules?.templateStyleMap?.[candidate.templateType] || [];
+  const lifecycleStyles = headlineRules?.lifecycleStyleMap?.[candidate.lifecycleStage || inferLifecycleStage(candidate)] || [];
+  return uniqueStrings([...templateStyles, ...lifecycleStyles]).slice(0, 4);
+}
+
+function deriveKeywordHints(candidate) {
+  const hints = new Set();
+  const pushTextTokens = (value) => {
+    const source = String(value || "").toLowerCase();
+    for (const phrase of [
+      "brand deals",
+      "sponsorships",
+      "ugc",
+      "creators",
+      "creator",
+      "paid collabs",
+      "youtube",
+      "instagram",
+      "tiktok",
+      "micro influencer",
+      "skincare",
+      "beauty",
+      "free product collabs",
+      "australia",
+    ]) {
+      if (source.includes(phrase)) hints.add(phrase);
+    }
+  };
+
+  pushTextTokens(candidate.seedTopic);
+  pushTextTokens(candidate.angle);
+  for (const tag of candidate.tags || []) {
+    pushTextTokens(tag);
+  }
+  for (const page of candidate.targetLandingPages || []) {
+    pushTextTokens(page.replace(/-/g, " "));
+  }
+
+  return [...hints].slice(0, 4);
+}
+
+function countMatchesInRecentHeadlines(recentHistory, matcher) {
+  return (recentHistory || []).reduce((count, item) => {
+    const title = `${item.title || ""} ${item.seoTitle || ""}`.toLowerCase();
+    return count + (matcher(title) ? 1 : 0);
+  }, 0);
+}
+
+function computeSoftFrequencyPenalty(title, recentHistory, headlineRules) {
+  const normalized = String(title || "").toLowerCase();
+  let penalty = 0;
+
+  for (const [term, config] of Object.entries(headlineRules?.softFrequencyTerms || {})) {
+    if (!normalized.includes(term)) continue;
+    const recentCount = countMatchesInRecentHeadlines(recentHistory, (value) => value.includes(term));
+    const softCap = Number(config?.softCap || 99);
+    if (recentCount >= softCap) {
+      penalty += 0.04 + (recentCount - softCap) * 0.015;
+    }
+  }
+
+  for (const [pattern, config] of Object.entries(headlineRules?.starterPatterns || {})) {
+    if (!normalized.startsWith(pattern)) continue;
+    const recentCount = countMatchesInRecentHeadlines(recentHistory, (value) => value.startsWith(pattern));
+    const softCap = Number(config?.softCap || 99);
+    if (recentCount >= softCap) {
+      penalty += 0.05 + (recentCount - softCap) * 0.02;
+    }
+  }
+
+  return clamp(penalty, 0, 0.42);
+}
+
+function computeHeadlineNovelty(title, recentHistory) {
+  const titleText = String(title || "").trim();
+  if (!titleText) return 0.3;
+  const overlaps = (recentHistory || []).map((item) =>
+    overlapRatio(titleText, `${item.title || ""} ${item.seoTitle || ""}`),
+  );
+  const maxOverlap = Math.max(0, ...overlaps);
+  return clamp(1 - maxOverlap);
+}
+
+function computeHeadlineNaturalness(title) {
+  const text = String(title || "").trim();
+  if (!text) return 0.2;
+  const words = text.split(/\s+/).filter(Boolean);
+  const colonCount = (text.match(/:/g) || []).length;
+  const titleCasePenalty = words.filter((word) => /^[A-Z][a-z]+$/.test(word)).length === words.length ? 0.04 : 0;
+  let score = 0.78;
+
+  if (words.length < 5) score -= 0.14;
+  if (words.length > 13) score -= 0.12;
+  if (text.length < 32) score -= 0.08;
+  if (text.length > 74) score -= 0.16;
+  if (colonCount > 1) score -= 0.16;
+  if (/\bframework\b/i.test(text)) score -= 0.1;
+  if (/\bqualification\b/i.test(text)) score -= 0.08;
+  if (/\bvetting\b/i.test(text) && /\bqualifying\b/i.test(text)) score -= 0.12;
+  if (/^(how|what|why)\s+creators\s+should\b/i.test(text)) score -= 0.08;
+  if (/^(evaluating|vetting|qualifying)\b/i.test(text)) score -= 0.06;
+
+  return clamp(score - titleCasePenalty, 0.2, 1);
+}
+
+function computeHeadlineStyleFit(candidate, style, preferredStyles) {
+  const normalizedStyle = String(style || "").trim().toLowerCase();
+  if (!preferredStyles.length) return 0.7;
+  if (normalizedStyle && preferredStyles.includes(normalizedStyle)) return 1;
+  if (!normalizedStyle) return 0.64;
+  return 0.48;
+}
+
+function computeHeadlineVoiceFit(title, candidate) {
+  const text = String(title || "").toLowerCase();
+  let score = 0.72;
+
+  if (candidate.lifecycleStage === "evaluation" && /\b(check|signal|worth|risk|red flag|fit)\b/.test(text)) {
+    score += 0.12;
+  }
+  if (candidate.lifecycleStage === "discovery" && /\b(best|worth|look at|shortlist|find)\b/.test(text)) {
+    score += 0.1;
+  }
+  if (candidate.lifecycleStage === "optimization" && /\bfix|improve|mistake|pattern\b/.test(text)) {
+    score += 0.12;
+  }
+  if (candidate.templateType === "category_roundup" && /\b(best|worth|this month|right now|shortlist)\b/.test(text)) {
+    score += 0.1;
+  }
+  if (candidate.templateType === "deal_spotlight" && /\bworth|stands out|closer look|really offers\b/.test(text)) {
+    score += 0.08;
+  }
+
+  return clamp(score);
+}
+
+function computeHeadlineSeoFit(title, candidate, keywordHints, headlineRules, mode = "h1") {
+  const normalized = String(title || "").toLowerCase();
+  const matchingHints = keywordHints.filter((hint) => normalized.includes(hint));
+  const hasPrimaryToken = matchingHints.length > 0;
+  let score = hasPrimaryToken ? 0.82 : 0.58;
+
+  if (matchingHints.length >= 2) score += 0.08;
+  if (candidate.targetLandingPages?.length) {
+    const matchesLandingIntent = candidate.targetLandingPages.some((page) =>
+      normalized.includes(String(page || "").replace(/-/g, " ").toLowerCase().split(/\s+/)[0] || ""),
+    );
+    if (matchesLandingIntent) score += 0.05;
+  }
+
+  for (const [term, config] of Object.entries(headlineRules?.softFrequencyTerms || {})) {
+    if (!normalized.includes(term)) continue;
+    score += Number(config?.seoValue || 0.5) * 0.05;
+  }
+
+  if (mode === "seo" && normalized.length > 68) score -= 0.06;
+  if (mode === "h1" && normalized.length < 38) score -= 0.05;
+
+  return clamp(score);
+}
+
+function scoreHeadlineCandidate({
+  rawCandidate,
+  candidate,
+  recentHistory,
+  headlineRules,
+  preferredStyles,
+  keywordHints,
+  mode,
+}) {
+  const item = normalizeHeadlineCandidate(rawCandidate);
+  if (!item) return null;
+
+  const title = item.title.trim();
+  const weights = headlineRules?.[mode === "seo" ? "seoTitleScoreWeights" : "h1ScoreWeights"] || {};
+  const naturalness = computeHeadlineNaturalness(title);
+  const novelty = computeHeadlineNovelty(title, recentHistory);
+  const styleFit = computeHeadlineStyleFit(candidate, item.style, preferredStyles);
+  const seoFit = computeHeadlineSeoFit(title, candidate, keywordHints, headlineRules, mode);
+  const voiceFit = computeHeadlineVoiceFit(title, candidate);
+  const frequencyPenalty = computeSoftFrequencyPenalty(title, recentHistory, headlineRules);
+  const total =
+    naturalness * Number(weights.naturalness || 0)
+    + novelty * Number(weights.novelty || 0)
+    + styleFit * Number(weights.styleFit || 0)
+    + seoFit * Number(weights.seoFit || 0)
+    + voiceFit * Number(weights.voiceFit || 0)
+    - frequencyPenalty;
+
+  return {
+    title,
+    style: item.style || "",
+    score: clamp(total),
+    factors: {
+      naturalness,
+      novelty,
+      styleFit,
+      seoFit,
+      voiceFit,
+      frequencyPenalty,
+    },
+  };
+}
+
+function selectHeadlineFromCandidates({
+  candidates,
+  fallbackTitle,
+  candidate,
+  recentHistory,
+  headlineRules,
+  preferredStyles,
+  keywordHints,
+  mode,
+}) {
+  const normalizedCandidates = uniqueHeadlineCandidates(candidates);
+  const fallbackCandidates = fallbackTitle ? uniqueHeadlineCandidates([fallbackTitle]) : [];
+  const combined = [...normalizedCandidates, ...fallbackCandidates];
+  const scored = combined
+    .map((item) =>
+      scoreHeadlineCandidate({
+        rawCandidate: item,
+        candidate,
+        recentHistory,
+        headlineRules,
+        preferredStyles,
+        keywordHints,
+        mode,
+      }),
+    )
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score);
+
+  const selected = scored[0] || {
+    title: String(fallbackTitle || candidate.seedTopic || "").trim(),
+    style: preferredStyles[0] || "",
+    score: 0.5,
+    factors: {},
+  };
+
+  return {
+    selected,
+    ranked: scored.slice(0, 5),
+  };
+}
+
 function buildBlogDocument({
   slug,
   draft,
@@ -1374,6 +1675,7 @@ async function loadV1ConfigBundle() {
     landingPageSupportLibrary,
     queryRules,
     scoringRules,
+    headlineRules,
     internalLinkingRules,
     toneRules,
     trendRules,
@@ -1386,6 +1688,7 @@ async function loadV1ConfigBundle() {
       loadJsonData("landing-page-support.json"),
       loadJsonData("query-rules.json"),
       loadJsonData("scoring-rules.json"),
+      loadJsonData("headline-rules.json"),
       loadJsonData("internal-linking-rules.json"),
       loadJsonData("tone-rules.json"),
       loadJsonData("trend-rules.json"),
@@ -1399,6 +1702,7 @@ async function loadV1ConfigBundle() {
     landingPageSupportLibrary,
     queryRules,
     scoringRules,
+    headlineRules,
     internalLinkingRules,
     toneRules,
     trendRules,
@@ -3790,6 +4094,8 @@ function buildDraftPrompt({
   promptContext,
   templateProfile,
   toneRules,
+  headlineRules,
+  recentHeadlineHistory,
 }) {
   const recentPosts = summarizeRecentPosts(manifest.posts || []);
   const productLine = [
@@ -3861,6 +4167,14 @@ function buildDraftPrompt({
   const coverStyleContext = promptContext.coverStyleProfile
     ? buildCoverStyleGuidance(candidate, promptContext.coverStyleProfile)
     : "";
+  const preferredHeadlineStyles = inferPreferredHeadlineStyles(candidate, headlineRules);
+  const headlineStyleDefinitions = preferredHeadlineStyles
+    .map((style) => `${style}: ${headlineRules?.styleBuckets?.[style] || ""}`.trim())
+    .filter(Boolean);
+  const recentHeadlinePreview = (recentHeadlineHistory || [])
+    .slice(0, Number(headlineRules?.recentWindow || 15))
+    .map((entry) => entry.title)
+    .filter(Boolean);
 
   return [
     "You are writing a production blog post for the CollabGrow website.",
@@ -3873,8 +4187,10 @@ function buildDraftPrompt({
     "Return JSON with this schema:",
     "{",
     '  "title": "string under 70 characters",',
+    `  "titleCandidates": [${Number(headlineRules?.candidateCounts?.title || 8)} distinct objects like {"title":"string under 70 characters","style":"one of ${Object.keys(headlineRules?.styleBuckets || {}).join(", ")}"}],`,
     '  "description": "string under 180 characters",',
     '  "seoTitle": "string under 70 characters",',
+    `  "seoTitleCandidates": [${Number(headlineRules?.candidateCounts?.seoTitle || 5)} distinct objects like {"title":"string under 70 characters","style":"one of ${Object.keys(headlineRules?.styleBuckets || {}).join(", ")}"}],`,
     '  "seoDescription": "string under 180 characters",',
     '  "tags": ["3 to 6 lowercase tags"],',
     '  "imagePrompt": "single paragraph for a 1200x630 cover image prompt that follows the visual direction below, with no text, no UI, and no watermark",',
@@ -3894,6 +4210,10 @@ function buildDraftPrompt({
     "- Prefer specific decision criteria, tradeoffs, and examples over motivational filler.",
     "- Use short paragraphs and varied sentence length.",
     "- The imagePrompt should match the cover style guidance below rather than defaulting to the same generic workspace image every time.",
+    "- The final title should sound like an experienced editor wrote it, not like an internal topic seed or SEO template.",
+    "- Keep important SEO language when it genuinely fits, but do not force every title into the same 'framework / vetting / qualification' structure.",
+    "- Vary title structures across the candidates. Do not make every option start with 'How', 'What', or 'Why'.",
+    "- H1 title can be more editorial and readable. SEO title should be slightly clearer and more search-friendly, but still natural.",
     "",
     `Selected layer: ${promptContext.layerLabel}`,
     `Creator workflow stage: ${promptContext.lifecycleStage}`,
@@ -3911,6 +4231,12 @@ function buildDraftPrompt({
     landingPageContext,
     trendContext,
     coverStyleContext,
+    headlineStyleDefinitions.length
+      ? `Preferred headline styles for this article: ${headlineStyleDefinitions.join("; ")}.`
+      : "",
+    recentHeadlinePreview.length
+      ? `Recent titles to avoid echoing too closely: ${JSON.stringify(recentHeadlinePreview)}`
+      : "",
     templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
     "",
@@ -3936,8 +4262,15 @@ async function generateBlogDraft({
   queryRules,
   toneRules,
   templateProfile,
+  headlineRules,
+  publishLog,
 }) {
   const promptContext = buildPromptContext(candidate, internalLinkingRules, queryRules);
+  const recentHeadlineHistory = collectRecentHeadlineHistory({
+    manifest,
+    publishLog,
+    limit: Number(headlineRules?.recentWindow || 15),
+  });
   const prompt = buildDraftPrompt({
     candidate,
     manifest,
@@ -3945,6 +4278,8 @@ async function generateBlogDraft({
     promptContext,
     templateProfile,
     toneRules,
+    headlineRules,
+    recentHeadlineHistory,
   });
 
   logStep("AI_TEXT", "Generating blog draft", {
@@ -4004,13 +4339,37 @@ async function generateBlogDraft({
     }
   }
 
-  const title = String(parsed.title || "").trim();
+  const fallbackTitle = String(parsed.title || "").trim();
   const description = String(parsed.description || "").trim();
-  const seoTitle = String(parsed.seoTitle || title).trim();
+  const fallbackSeoTitle = String(parsed.seoTitle || fallbackTitle).trim();
   const seoDescription = String(parsed.seoDescription || description).trim();
   const imagePrompt = String(parsed.imagePrompt || "").trim();
-  const rawMarkdown = ensureMarkdownHasH1(String(parsed.markdown || "").trim(), title);
   const mergedTags = sanitizeTags([...(parsed.tags || []), ...(candidate.tags || [])]);
+  const keywordHints = deriveKeywordHints(candidate);
+  const preferredHeadlineStyles = inferPreferredHeadlineStyles(candidate, headlineRules);
+  const titleSelection = selectHeadlineFromCandidates({
+    candidates: parsed.titleCandidates || [],
+    fallbackTitle,
+    candidate,
+    recentHistory: recentHeadlineHistory,
+    headlineRules,
+    preferredStyles: preferredHeadlineStyles,
+    keywordHints,
+    mode: "h1",
+  });
+  const seoTitleSelection = selectHeadlineFromCandidates({
+    candidates: parsed.seoTitleCandidates || parsed.titleCandidates || [],
+    fallbackTitle: fallbackSeoTitle || titleSelection.selected.title,
+    candidate,
+    recentHistory: recentHeadlineHistory,
+    headlineRules,
+    preferredStyles: preferredHeadlineStyles,
+    keywordHints,
+    mode: "seo",
+  });
+  const title = titleSelection.selected.title;
+  const seoTitle = seoTitleSelection.selected.title;
+  const rawMarkdown = ensureMarkdownHasH1(String(parsed.markdown || "").trim(), title);
 
   if (!title || !description || !rawMarkdown || !imagePrompt) {
     throw new Error("Generated article is missing one of: title, description, markdown, imagePrompt.");
@@ -4022,6 +4381,8 @@ async function generateBlogDraft({
 
   logStep("AI_TEXT", "Draft generated", {
     title,
+    titleStyle: titleSelection.selected.style,
+    seoTitle,
     tags: mergedTags,
     wordCount: getWordCount(rawMarkdown),
   });
@@ -4041,6 +4402,10 @@ async function generateBlogDraft({
     markdown: rawMarkdown,
     tags: mergedTags,
     promptContext,
+    titleStyle: titleSelection.selected.style,
+    seoTitleStyle: seoTitleSelection.selected.style,
+    titleCandidates: titleSelection.ranked,
+    seoTitleCandidates: seoTitleSelection.ranked,
   };
 }
 
@@ -4157,6 +4522,7 @@ function buildPublishLogEntry({
     publishDate: dateString,
     slug,
     title: draft.title,
+    seoTitle: draft.seoTitle,
     layer: candidate.layer,
     lifecycleStage: candidate.lifecycleStage || inferLifecycleStage(candidate),
     cluster: candidate.cluster,
@@ -4168,6 +4534,8 @@ function buildPublishLogEntry({
     score,
     keywordGroup: candidate.keywordGroup || "",
     templateType: candidate.templateType || "",
+    titleStyle: draft.titleStyle || "",
+    seoTitleStyle: draft.seoTitleStyle || "",
     tags: draft.tags,
   };
 }
@@ -4424,6 +4792,8 @@ async function main() {
       queryRules: configBundle.queryRules,
       toneRules: configBundle.toneRules,
       templateProfile,
+      headlineRules: configBundle.headlineRules,
+      publishLog,
     });
     runState.title = draft.title;
     runState.wordCount = getWordCount(draft.markdown);

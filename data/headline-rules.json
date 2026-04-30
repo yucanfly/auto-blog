@@ -1,0 +1,69 @@
+{
+  "recentWindow": 15,
+  "candidateCounts": {
+    "title": 8,
+    "seoTitle": 5
+  },
+  "styleBuckets": {
+    "decision": "clear judgment, tradeoffs, and whether the opportunity is worth it",
+    "checklist": "specific things to check before replying, applying, or committing",
+    "signals": "concrete signs, clues, or patterns that guide creator decisions",
+    "roundup": "curated shortlist or worth-watching opportunities for a category, platform, or niche",
+    "worth_it": "value judgment about payout, workload, or upside versus friction",
+    "comparison": "contrast between deal types, platforms, workflows, or creator choices",
+    "workflow": "repeatable process, system, or way of moving through the decision",
+    "mistakes_or_red_flags": "pitfalls, risks, avoidable mistakes, or warning signs"
+  },
+  "lifecycleStyleMap": {
+    "readiness": ["checklist", "workflow", "mistakes_or_red_flags"],
+    "discovery": ["roundup", "workflow", "decision"],
+    "evaluation": ["decision", "signals", "worth_it", "checklist"],
+    "execution": ["workflow", "decision", "comparison"],
+    "optimization": ["mistakes_or_red_flags", "workflow", "decision"]
+  },
+  "templateStyleMap": {
+    "landing_page_support": ["decision", "checklist", "roundup", "signals"],
+    "category_roundup": ["roundup", "decision", "workflow"],
+    "deal_spotlight": ["decision", "worth_it", "signals"],
+    "brand_review": ["decision", "signals", "worth_it"],
+    "brand_fit": ["decision", "comparison", "signals"],
+    "email_pattern": ["signals", "checklist", "workflow"],
+    "creator_scenario": ["workflow", "decision", "mistakes_or_red_flags"],
+    "search_console_query": ["decision", "workflow", "checklist"],
+    "trend_signal": ["signals", "decision", "mistakes_or_red_flags"]
+  },
+  "softFrequencyTerms": {
+    "sponsorships": { "softCap": 3, "seoValue": 0.94 },
+    "brand deals": { "softCap": 4, "seoValue": 0.97 },
+    "framework": { "softCap": 1, "seoValue": 0.35 },
+    "qualification": { "softCap": 1, "seoValue": 0.42 },
+    "qualifying": { "softCap": 2, "seoValue": 0.56 },
+    "vetting": { "softCap": 2, "seoValue": 0.58 },
+    "evaluating": { "softCap": 2, "seoValue": 0.6 },
+    "creators": { "softCap": 8, "seoValue": 0.9 },
+    "ugc": { "softCap": 4, "seoValue": 0.92 }
+  },
+  "starterPatterns": {
+    "how ": { "softCap": 5 },
+    "what ": { "softCap": 4 },
+    "why ": { "softCap": 3 },
+    "a ": { "softCap": 2 },
+    "evaluating ": { "softCap": 2 },
+    "vetting ": { "softCap": 2 },
+    "qualifying ": { "softCap": 2 }
+  },
+  "h1ScoreWeights": {
+    "naturalness": 0.28,
+    "novelty": 0.2,
+    "styleFit": 0.2,
+    "seoFit": 0.18,
+    "voiceFit": 0.14
+  },
+  "seoTitleScoreWeights": {
+    "naturalness": 0.18,
+    "novelty": 0.12,
+    "styleFit": 0.12,
+    "seoFit": 0.4,
+    "voiceFit": 0.18
+  }
+}
