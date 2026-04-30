@@ -7,6 +7,22 @@ on:
         description: Optional topic override for a manual run
         required: false
         type: string
+      candidate_id:
+        description: "Optional candidate id for a manual run (for example: landing-youtube-brand-deals)"
+        required: false
+        type: string
+      layer:
+        description: Optional layer override for a manual run
+        required: false
+        type: string
+      product:
+        description: Optional product override for a manual run
+        required: false
+        type: string
+      batch_preset:
+        description: "Optional batch preset (use landing_support_top10 to publish the 10 landing support articles)"
+        required: false
+        type: string
       dry_run:
         description: Generate and validate without uploading to OSS
         required: false
@@ -63,24 +79,84 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate preview only
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      - name: Run blog publish flow
         env:
           BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
+          BLOG_CANDIDATE_ID: ${{ inputs.candidate_id }}
+          BLOG_LAYER_OVERRIDE: ${{ inputs.layer }}
+          BLOG_PRODUCT_OVERRIDE: ${{ inputs.product }}
+          BLOG_BATCH_PRESET: ${{ inputs.batch_preset }}
+          BLOG_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
-            pnpm blog:publish:dry-run --topic "$BLOG_TOPIC_OVERRIDE"
+          set -euo pipefail
+
+          if [ "${BLOG_DRY_RUN:-false}" = "true" ]; then
+            SCRIPT_NAME="blog:publish:dry-run"
+            MODE_LABEL="dry-run"
           else
-            pnpm blog:publish:dry-run
+            SCRIPT_NAME="blog:publish"
+            MODE_LABEL="publish"
           fi
 
-      - name: Publish blog to OSS
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
-        env:
-          BLOG_TOPIC_OVERRIDE: ${{ inputs.topic }}
-        run: |
-          if [ -n "$BLOG_TOPIC_OVERRIDE" ]; then
-            pnpm blog:publish --topic "$BLOG_TOPIC_OVERRIDE"
+          echo "Running mode: ${MODE_LABEL}"
+          echo "Candidate override: ${BLOG_CANDIDATE_ID:-}"
+          echo "Topic override: ${BLOG_TOPIC_OVERRIDE:-}"
+          echo "Layer override: ${BLOG_LAYER_OVERRIDE:-}"
+          echo "Product override: ${BLOG_PRODUCT_OVERRIDE:-}"
+          echo "Batch preset: ${BLOG_BATCH_PRESET:-}"
+
+          run_single() {
+            local candidate_id="${1:-}"
+            local topic="${2:-}"
+            local layer="${3:-}"
+            local product="${4:-}"
+            local args=()
+
+            if [ -n "${candidate_id}" ]; then
+              args+=(--candidate-id "${candidate_id}")
+            elif [ -n "${topic}" ]; then
+              args+=(--topic "${topic}")
+            fi
+
+            if [ -n "${layer}" ]; then
+              args+=(--layer "${layer}")
+            fi
+
+            if [ -n "${product}" ]; then
+              args+=(--product "${product}")
+            fi
+
+            echo "Executing: pnpm run ${SCRIPT_NAME} -- ${args[*]}"
+            pnpm run "${SCRIPT_NAME}" -- "${args[@]}"
+          }
+
+          if [ -n "${BLOG_BATCH_PRESET:-}" ]; then
+            case "${BLOG_BATCH_PRESET}" in
+              landing_support_top10)
+                for candidate_id in \
+                  landing-brand-deals-for-creators \
+                  landing-ugc-brand-deals \
+                  landing-tiktok-brand-deals \
+                  landing-instagram-brand-deals \
+                  landing-youtube-brand-deals \
+                  landing-beauty-brand-deals \
+                  landing-skincare-brand-deals \
+                  landing-australia-paid-collabs \
+                  landing-free-product-collabs \
+                  landing-micro-influencer-brand-deals
+                do
+                  run_single "${candidate_id}" "" "" ""
+                done
+                ;;
+              *)
+                echo "Unknown batch preset: ${BLOG_BATCH_PRESET}"
+                exit 1
+                ;;
+            esac
           else
-            pnpm blog:publish
+            run_single \
+              "${BLOG_CANDIDATE_ID:-}" \
+              "${BLOG_TOPIC_OVERRIDE:-}" \
+              "${BLOG_LAYER_OVERRIDE:-}" \
+              "${BLOG_PRODUCT_OVERRIDE:-}"
           fi
