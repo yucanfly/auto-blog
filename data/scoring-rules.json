@@ -21,9 +21,13 @@
     "priority": 0.08,
     "workflowCoverage": 0.12,
     "productSurfaceDepth": 0.08,
+    "sourceStrategyFit": 0.08,
     "stateTransitionValue": 0.08,
     "dealSupplyFit": 0.07,
     "cannibalizationRisk": 0.25
+  },
+  "sourceTypeTargets": {
+    "landing_page_support": 0.16
   },
   "productPriority": {
     "deal_hunter": 1,

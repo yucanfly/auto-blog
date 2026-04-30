@@ -532,6 +532,7 @@ function parseArgs(argv) {
     topic: "",
     layer: "",
     product: "",
+    candidateId: "",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -560,6 +561,12 @@ function parseArgs(argv) {
 
     if (value === "--product") {
       args.product = String(argv[index + 1] || "").trim();
+      index += 1;
+      continue;
+    }
+
+    if (value === "--candidate-id") {
+      args.candidateId = String(argv[index + 1] || "").trim();
       index += 1;
       continue;
     }
@@ -1029,6 +1036,8 @@ function buildBlogDocument({
   markdown,
   tags,
   author,
+  targetLandingPages,
+  contentCluster,
 }) {
   return {
     slug,
@@ -1041,6 +1050,8 @@ function buildBlogDocument({
     tags,
     category: "blog",
     draft,
+    targetLandingPages: uniqueStrings(targetLandingPages || []),
+    contentCluster: String(contentCluster || "").trim() || undefined,
     seo: {
       title: seoTitle,
       description: seoDescription,
@@ -1063,6 +1074,8 @@ function buildBlogSummary(documentUrl, postDocument) {
     tags: postDocument.tags,
     category: postDocument.category,
     draft: postDocument.draft,
+    targetLandingPages: postDocument.targetLandingPages,
+    contentCluster: postDocument.contentCluster,
     seo: postDocument.seo,
   };
 }
@@ -1154,6 +1167,7 @@ async function loadV1ConfigBundle() {
   const [
     topicLibrary,
     programmaticLibrary,
+    landingPageSupportLibrary,
     queryRules,
     scoringRules,
     internalLinkingRules,
@@ -1165,6 +1179,7 @@ async function loadV1ConfigBundle() {
     await Promise.all([
       loadJsonData("topic-library.json"),
       loadJsonData("programmatic-library.json"),
+      loadJsonData("landing-page-support.json"),
       loadJsonData("query-rules.json"),
       loadJsonData("scoring-rules.json"),
       loadJsonData("internal-linking-rules.json"),
@@ -1177,6 +1192,7 @@ async function loadV1ConfigBundle() {
   return {
     topicLibrary,
     programmaticLibrary,
+    landingPageSupportLibrary,
     queryRules,
     scoringRules,
     internalLinkingRules,
@@ -2702,6 +2718,24 @@ function buildProgrammaticCandidates(programmaticLibrary) {
   return [...brandCandidates, ...emailCandidates, ...creatorCandidates];
 }
 
+function buildLandingPageSupportCandidates(landingPageSupportLibrary) {
+  return (landingPageSupportLibrary.articles || []).map((record) => ({
+    ...record,
+    layer: "core_editorial",
+    cluster: record.cluster || "landing-support",
+    lifecycleStage: record.lifecycleStage || "discovery",
+    primaryProduct: record.primaryProduct || "deal_hunter",
+    intentType: record.intentType || "workflow",
+    priority: Number(record.priority || 0.88),
+    sourceType: "landing_page_support",
+    templateType: "landing_page_support",
+    keywordGroup: record.keywordGroup || `landing-support:${record.id}`,
+    topicKey: `landing_page_support:${record.id}`,
+    tags: sanitizeTags(record.tags || []),
+    targetLandingPages: uniqueStrings(record.targetLandingPages || []),
+  }));
+}
+
 function buildCandidatePool(configBundle, args, externalCandidates = []) {
   const coreEditorial = (configBundle.topicLibrary.coreEditorial || []).map((record) =>
     normalizeTopicRecord(record, "core_editorial"),
@@ -2713,8 +2747,16 @@ function buildCandidatePool(configBundle, args, externalCandidates = []) {
     normalizeTopicRecord(record, "trend_linked"),
   );
   const programmatic = buildProgrammaticCandidates(configBundle.programmaticLibrary);
+  const landingSupport = buildLandingPageSupportCandidates(configBundle.landingPageSupportLibrary);
 
-  const combined = [...coreEditorial, ...toolProblem, ...programmatic, ...trendLinked, ...externalCandidates];
+  const combined = [
+    ...coreEditorial,
+    ...toolProblem,
+    ...programmatic,
+    ...trendLinked,
+    ...landingSupport,
+    ...externalCandidates,
+  ];
 
   return combined.filter((candidate) => {
     if (args.layer && candidate.layer !== args.layer) return false;
@@ -2804,6 +2846,19 @@ function computeLifecycleGap(candidate, recentEntries, scoringRules) {
   const counts = computeLifecycleStats(recentEntries, scoringRules);
   const total = recentEntries.length || 0;
   const actual = total ? Number(counts[stage] || 0) / total : 0;
+  return clamp(0.5 + Math.max(0, target - actual));
+}
+
+function computeSourceTypeGap(candidate, recentEntries, scoringRules) {
+  const targets = scoringRules.sourceTypeTargets || {};
+  const target = Number(targets[candidate.sourceType] || 0);
+  if (!target) return 0.55;
+
+  const total = recentEntries.length || 0;
+  const sameSourceCount = recentEntries.filter(
+    (entry) => entry.topicSource === candidate.sourceType,
+  ).length;
+  const actual = total ? sameSourceCount / total : 0;
   return clamp(0.5 + Math.max(0, target - actual));
 }
 
@@ -2949,6 +3004,7 @@ function scoreCandidate({
   );
   const topicalGap = computeClusterGap(candidate, recentEntries);
   const workflowCoverage = computeLifecycleGap(candidate, recentEntries, scoringRules);
+  const sourceStrategyFit = computeSourceTypeGap(candidate, recentEntries, scoringRules);
   const productSurfaceDepth = computeProductSurfaceDepth(candidate);
   const stateTransitionValue = computeStateTransitionValue(candidate);
   const dealSupplyFit = computeDealSupplyFit(candidate);
@@ -2961,6 +3017,7 @@ function scoreCandidate({
     + freshness * Number(weights.freshness || 0)
     + priorityScore * Number(weights.priority || 0)
     + workflowCoverage * Number(weights.workflowCoverage || 0)
+    + sourceStrategyFit * Number(weights.sourceStrategyFit || 0)
     + productSurfaceDepth * Number(weights.productSurfaceDepth || 0)
     + stateTransitionValue * Number(weights.stateTransitionValue || 0)
     + dealSupplyFit * Number(weights.dealSupplyFit || 0)
@@ -2976,6 +3033,7 @@ function scoreCandidate({
       freshness,
       priorityScore,
       workflowCoverage,
+      sourceStrategyFit,
       productSurfaceDepth,
       stateTransitionValue,
       dealSupplyFit,
@@ -3094,6 +3152,39 @@ function selectCandidate({
           score: 1,
           layer: manualCandidate.layer,
           seedTopic: manualCandidate.seedTopic,
+        },
+      ],
+    };
+  }
+
+  if (args.candidateId) {
+    const candidatePool = buildCandidatePool(configBundle, args, [
+      ...searchConsoleCandidates,
+      ...trendCandidates,
+      ...dealBoardCandidates,
+    ]);
+    const matchedCandidate = candidatePool.find((candidate) => candidate.id === args.candidateId);
+    if (!matchedCandidate) {
+      throw new Error(`Candidate not found for --candidate-id=${args.candidateId}`);
+    }
+
+    logStep("TOPIC", "Using manual candidate override", {
+      candidateId: args.candidateId,
+      product: matchedCandidate.primaryProduct,
+      layer: matchedCandidate.layer,
+      sourceType: matchedCandidate.sourceType || "library",
+    });
+
+    return {
+      candidate: matchedCandidate,
+      selectedLayer: matchedCandidate.layer,
+      rankedPreview: [
+        {
+          id: matchedCandidate.id,
+          score: 1,
+          layer: matchedCandidate.layer,
+          seedTopic: matchedCandidate.seedTopic,
+          primaryProduct: matchedCandidate.primaryProduct,
         },
       ],
     };
@@ -3306,6 +3397,33 @@ function buildLiveOpportunitiesMarkdown(candidate) {
   return lines.length > 2 ? lines.join("\n") : "";
 }
 
+function buildLandingPageSupportMarkdown(candidate, internalLinkingRules) {
+  const landingPages = internalLinkingRules.landingPages || {};
+  const targetLandingPages = uniqueStrings(candidate.targetLandingPages || [])
+    .map((slug) => ({
+      slug,
+      ...(landingPages[slug] || {}),
+    }))
+    .filter((item) => item.label && item.url);
+
+  if (!targetLandingPages.length) return "";
+
+  const lines = [
+    `## ${internalLinkingRules.landingPageSectionTitle || "Related Deal Pages"}`,
+    "",
+    internalLinkingRules.landingPageSectionIntro
+      || "If you want to move from general advice to live opportunities, these focused deal pages are the next step:",
+    "",
+  ];
+
+  for (const page of targetLandingPages) {
+    const suffix = page.description ? `: ${page.description}` : "";
+    lines.push(`- [${page.label}](${page.url})${suffix}`);
+  }
+
+  return lines.join("\n");
+}
+
 function scoreRelatedPost(post, candidate) {
   return overlapRatio(buildCandidateText(candidate), `${post.title} ${(post.tags || []).join(" ")}`);
 }
@@ -3383,6 +3501,7 @@ function buildPromptContext(candidate, internalLinkingRules, queryRules) {
     templateType: candidate.templateType || candidate.sourceType || candidate.layer,
     trendSignal: candidate.trendSignal || null,
     dealBoardSignal: candidate.dealBoardSignal || null,
+    targetLandingPages: uniqueStrings(candidate.targetLandingPages || []),
   };
 }
 
@@ -3447,6 +3566,9 @@ function buildDraftPrompt({
         ].filter(Boolean).join("\n");
       })()
     : "";
+  const landingPageContext = promptContext.targetLandingPages?.length
+    ? `Primary deal pages this article should support naturally: ${promptContext.targetLandingPages.join(", ")}. Treat them as the most relevant next-step pages for readers who want live opportunities after reading.`
+    : "";
   const trendContext = promptContext.trendSignal
     ? [
         `Recent signal title: ${promptContext.trendSignal.title}`,
@@ -3504,6 +3626,7 @@ function buildDraftPrompt({
     brandContext,
     scenarioContext,
     dealBoardContext,
+    landingPageContext,
     trendContext,
     templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
@@ -3712,9 +3835,18 @@ function enrichMarkdown({
     currentSlug: slug,
     internalLinkingRules,
   });
+  const landingPageSupport = buildLandingPageSupportMarkdown(
+    candidate,
+    internalLinkingRules,
+  );
   const liveOpportunities = buildLiveOpportunitiesMarkdown(candidate);
 
-  const markdown = appendMarkdownSections(draft.markdown, [toolSection, liveOpportunities, relatedReading]);
+  const markdown = appendMarkdownSections(draft.markdown, [
+    toolSection,
+    landingPageSupport,
+    liveOpportunities,
+    relatedReading,
+  ]);
   return {
     markdown,
     ctaStyle,
@@ -3826,6 +3958,7 @@ async function main() {
         coreEditorial: configBundle.topicLibrary.coreEditorial?.length || 0,
         toolProblem: configBundle.topicLibrary.toolProblem?.length || 0,
         trendLinked: configBundle.topicLibrary.trendLinked?.length || 0,
+        landingSupport: configBundle.landingPageSupportLibrary.articles?.length || 0,
         brands: configBundle.programmaticLibrary.brands?.length || 0,
         emailScenarios: configBundle.programmaticLibrary.emailScenarios?.length || 0,
         creatorScenarios: configBundle.programmaticLibrary.creatorScenarios?.length || 0,
@@ -4079,6 +4212,8 @@ async function main() {
       markdown: enriched.markdown,
       tags: draft.tags.length ? draft.tags : ["creator deals", "collabgrow", "blog"],
       author,
+      targetLandingPages: candidate.targetLandingPages || [],
+      contentCluster: candidate.cluster || "",
     });
 
     const postSummary = buildBlogSummary(documentUrl, postDocument);
