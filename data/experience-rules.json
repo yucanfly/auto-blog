@@ -1,0 +1,52 @@
+{
+  "maxModulesPerArticle": 2,
+  "moduleTypes": {
+    "representative_scenario": {
+      "label": "Representative Scenario",
+      "description": "A plausible creator-brand situation that feels realistic without pretending to be a named client case."
+    },
+    "decision_math": {
+      "label": "Decision Math",
+      "description": "A simplified, creator-side calculation block that makes workload, payout, and break-even tradeoffs tangible."
+    },
+    "clause_breakdown": {
+      "label": "Clause Breakdown",
+      "description": "A sample risky clause, why it matters, and a safer rewrite or pushback version."
+    },
+    "negotiation_script": {
+      "label": "Negotiation Script",
+      "description": "A copy-paste reply or pushback script a creator could realistically adapt."
+    }
+  },
+  "lifecycleModuleMap": {
+    "readiness": ["representative_scenario", "negotiation_script"],
+    "discovery": ["representative_scenario", "decision_math"],
+    "evaluation": ["clause_breakdown", "decision_math", "representative_scenario"],
+    "execution": ["negotiation_script", "clause_breakdown", "representative_scenario"],
+    "optimization": ["decision_math", "representative_scenario", "negotiation_script"]
+  },
+  "templateModuleMap": {
+    "landing_page_support": ["representative_scenario", "decision_math"],
+    "category_roundup": ["representative_scenario", "decision_math"],
+    "deal_spotlight": ["decision_math", "representative_scenario", "negotiation_script"],
+    "brand_review": ["representative_scenario", "clause_breakdown"],
+    "brand_fit": ["representative_scenario", "decision_math"],
+    "email_pattern": ["negotiation_script", "clause_breakdown", "representative_scenario"],
+    "creator_scenario": ["representative_scenario", "decision_math"],
+    "search_console_query": ["representative_scenario", "decision_math"],
+    "trend_signal": ["representative_scenario", "negotiation_script"]
+  },
+  "introLabels": {
+    "representative_scenario": "A typical creator-side version of this situation might look like this:",
+    "decision_math": "A simplified version of the creator-side math often looks like this:",
+    "clause_breakdown": "A representative version of the clause or wording problem usually looks like this:",
+    "negotiation_script": "A practical reply a creator could adapt in this kind of situation:"
+  },
+  "disclaimer": "These examples are representative teaching scenarios built to reflect common creator-brand workflows. They are not presented as audited client records or legal advice.",
+  "plausibilityRules": [
+    "Do not claim a named creator, named client, or exact historical deal unless the article already includes that verified context.",
+    "Use realistic but clearly illustrative numbers, timelines, and workload assumptions.",
+    "Do not invent surveys, benchmarks, or claims about how often something happens unless the article already cites a real source.",
+    "If you provide a script, make it sound usable and grounded rather than theatrical or overly polished."
+  ]
+}

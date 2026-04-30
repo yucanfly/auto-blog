@@ -30,7 +30,7 @@ pnpm blog:publish
 
 - `SITE_BASE_URL`
 - `BLOG_AI_BASE_URL`
-- `BLOG_TEXT_MODEL`
+- `BLOG_TEXT_MODEL` (default: `gemini-3.1-pro-preview`)
 - `BLOG_IMAGE_MODEL`
 - `BLOG_OSS_BUCKET`
 - `BLOG_OSS_ENDPOINT`

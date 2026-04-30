@@ -1,0 +1,48 @@
+{
+  "maxBlocksPerArticle": 3,
+  "blockTypes": {
+    "table": {
+      "label": "Table",
+      "description": "Use when a side-by-side comparison, shortlist, or attribute matrix would make the article more usable."
+    },
+    "checklist": {
+      "label": "Checklist",
+      "description": "Use when readers need a before-you-apply, before-you-sign, or before-you-reply review list."
+    },
+    "decision_grid": {
+      "label": "Decision Grid",
+      "description": "Use when the article benefits from mapping deal situations to recommended creator actions."
+    },
+    "callout": {
+      "label": "Callout",
+      "description": "Use when one short warning, caution, or tactical reminder deserves a visual interruption."
+    },
+    "visual_brief": {
+      "label": "Visual Brief",
+      "description": "Use sparingly when a workflow or comparison would benefit from a future explainer illustration."
+    }
+  },
+  "lifecycleBlockMap": {
+    "readiness": ["checklist", "table", "callout"],
+    "discovery": ["table", "decision_grid", "checklist"],
+    "evaluation": ["decision_grid", "table", "checklist", "callout"],
+    "execution": ["checklist", "decision_grid", "callout"],
+    "optimization": ["decision_grid", "table", "callout"]
+  },
+  "templateBlockMap": {
+    "landing_page_support": ["table", "checklist"],
+    "category_roundup": ["table", "decision_grid", "visual_brief"],
+    "deal_spotlight": ["decision_grid", "table", "callout"],
+    "brand_review": ["table", "callout"],
+    "brand_fit": ["decision_grid", "table"],
+    "email_pattern": ["checklist", "callout", "decision_grid"],
+    "creator_scenario": ["decision_grid", "checklist"],
+    "search_console_query": ["checklist", "table"],
+    "trend_signal": ["callout", "checklist", "visual_brief"]
+  },
+  "renderOrder": ["table", "decision_grid", "checklist", "callout", "visual_brief"],
+  "visualBriefPolicy": {
+    "renderAsTextOnly": true,
+    "note": "For now, visual briefs should render as a structured markdown callout rather than triggering a second generated illustration."
+  }
+}

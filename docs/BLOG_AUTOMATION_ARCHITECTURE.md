@@ -444,7 +444,7 @@ Important related files in the main project include:
 ### AI generation
 
 - Yunwu AI endpoint
-- `gemini-3-flash-preview`
+- `gemini-3.1-pro-preview`
 - `gemini-3.1-flash-image-preview`
 
 ### Search data

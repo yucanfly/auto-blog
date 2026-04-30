@@ -1,0 +1,275 @@
+{
+  "defaultProfile": "editorial_analysis",
+  "quality": {
+    "rewriteThreshold": 0.63,
+    "warnThreshold": 0.75,
+    "genericHeadingPatterns": [
+      "^what to check\\b",
+      "^what to do next\\b",
+      "^why this matters\\b",
+      "^key takeaways?\\b",
+      "^final takeaways?\\b",
+      "^faq\\b",
+      "^frequently asked questions\\b"
+    ],
+    "repetitiveStarters": ["how", "what", "why", "when"],
+    "maxRepeatedStarterRatio": 0.67
+  },
+  "layerProfileMap": {
+    "core_editorial": "editorial_analysis",
+    "tool_problem": "response_and_rewrite",
+    "controlled_programmatic": "creator_fit_breakdown",
+    "trend_linked": "timely_implications"
+  },
+  "lifecycleProfileMap": {
+    "readiness": "prep_checklist",
+    "discovery": "discovery_playbook",
+    "evaluation": "decision_breakdown",
+    "execution": "response_and_rewrite",
+    "optimization": "mistakes_and_fix"
+  },
+  "intentProfileMap": {
+    "workflow": "workflow_playbook",
+    "checklist": "prep_checklist",
+    "red-flags": "mistakes_and_fix",
+    "review": "creator_fit_breakdown",
+    "fit": "creator_fit_breakdown",
+    "comparison": "decision_breakdown",
+    "roundup": "shortlist_roundup",
+    "framework": "decision_breakdown"
+  },
+  "templateProfileMap": {
+    "brand_review": "creator_fit_breakdown",
+    "brand_fit": "creator_fit_breakdown",
+    "email_pattern": "response_and_rewrite",
+    "creator_scenario": "workflow_playbook",
+    "category_roundup": "shortlist_roundup",
+    "deal_spotlight": "deal_spotlight_analysis",
+    "landing_page_support": "discovery_playbook",
+    "trend_signal": "timely_implications",
+    "search_console_query": "editorial_analysis"
+  },
+  "profiles": {
+    "editorial_analysis": {
+      "label": "Editorial analysis",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "optional",
+      "introStyle": "Open with a sharp creator-side observation or tension point, not a dictionary definition of the topic.",
+      "sectionCountGuidance": "Use 3 to 5 substantial sections with uneven emphasis when it improves readability.",
+      "faqPolicy": "Include a short FAQ only when there are unresolved search-intent questions worth answering directly.",
+      "closingStyle": "End with a concise practical takeaway or next-step lens, not a padded summary paragraph.",
+      "sectionPatterns": [
+        "why this issue matters now",
+        "what creators usually miss",
+        "how to evaluate the tradeoff in practice",
+        "what to do next if the signal is positive or negative"
+      ],
+      "avoid": [
+        "equal-weight sections that all sound the same",
+        "generic overview-first structure",
+        "mandatory FAQ when it adds little value"
+      ]
+    },
+    "prep_checklist": {
+      "label": "Preparation checklist",
+      "minSections": 3,
+      "maxSections": 4,
+      "faqMode": "optional",
+      "introStyle": "Start with the readiness gap or the cost of getting this wrong too early.",
+      "sectionCountGuidance": "Favor 3 to 4 sections plus a strong checklist or table rather than long narrative blocks.",
+      "faqPolicy": "FAQ is optional and should stay brief if included.",
+      "closingStyle": "Close with a concrete before-you-start reminder or shortlist of fixes.",
+      "sectionPatterns": [
+        "what has to be ready before you move",
+        "what creators usually underestimate",
+        "a practical checklist or scorecard",
+        "what good enough looks like"
+      ],
+      "avoid": [
+        "overly philosophical setup",
+        "long abstract sections without a checklist"
+      ]
+    },
+    "discovery_playbook": {
+      "label": "Discovery playbook",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "optional",
+      "introStyle": "Open from the browsing problem: too many listings, not enough clarity on what deserves attention.",
+      "sectionCountGuidance": "Use 3 to 5 sections and make one of them clearly action-oriented for building a shortlist.",
+      "faqPolicy": "FAQ is optional; use it only if it helps answer quick discovery questions.",
+      "closingStyle": "Finish with a next-browsing or shortlist action, not a generic conclusion.",
+      "sectionPatterns": [
+        "what makes this opportunity pool worth checking",
+        "how to separate high-fit options from noisy ones",
+        "who should look closer and who should move on",
+        "how to turn browsing into a real shortlist"
+      ],
+      "avoid": [
+        "broad market overview with no shortlist logic",
+        "fake comprehensiveness"
+      ]
+    },
+    "decision_breakdown": {
+      "label": "Decision breakdown",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "optional",
+      "introStyle": "Lead with the judgment call, friction, or cost of saying yes too quickly.",
+      "sectionCountGuidance": "Use 3 to 5 sections and let one section carry the heaviest analysis instead of flattening everything.",
+      "faqPolicy": "FAQ can appear if there are 2 to 4 high-value questions; skip it otherwise.",
+      "closingStyle": "End with a clear decision lens: when to continue, push back, or pass.",
+      "sectionPatterns": [
+        "what the upside really is",
+        "where the hidden friction sits",
+        "what changes the decision for different creator types",
+        "a final yes / no / renegotiate lens"
+      ],
+      "avoid": [
+        "framework language repeated in every heading",
+        "too many parallel mini-sections"
+      ]
+    },
+    "workflow_playbook": {
+      "label": "Workflow playbook",
+      "minSections": 4,
+      "maxSections": 6,
+      "faqMode": "discourage",
+      "introStyle": "Frame the article around a task or sequence creators need to move through, not a static concept.",
+      "sectionCountGuidance": "Use 4 to 6 steps or phases only when they feel like a real workflow, otherwise keep it tighter.",
+      "faqPolicy": "FAQ is usually unnecessary unless the workflow leaves common edge-case questions unresolved.",
+      "closingStyle": "Close with the next stage in the workflow or the handoff to another decision.",
+      "sectionPatterns": [
+        "the first pass",
+        "what to check next",
+        "where creators slow down or get stuck",
+        "what the next workflow handoff should be"
+      ],
+      "avoid": [
+        "steps that are just restated headings",
+        "pretending every workflow has the same number of stages"
+      ]
+    },
+    "response_and_rewrite": {
+      "label": "Response and rewrite",
+      "minSections": 3,
+      "maxSections": 4,
+      "faqMode": "avoid",
+      "introStyle": "Open with the real communication or contract problem, not a broad explanation of the topic.",
+      "sectionCountGuidance": "Keep it tight: usually 3 to 4 sections plus one strong rewrite, script, or clause example.",
+      "faqPolicy": "FAQ should usually be omitted unless there are clear tactical questions to answer.",
+      "closingStyle": "End with the exact next move, reply angle, or rewrite principle.",
+      "sectionPatterns": [
+        "what this language is doing",
+        "what is missing, risky, or too broad",
+        "a stronger rewrite or reply",
+        "when to push back and when to pass"
+      ],
+      "avoid": [
+        "generic education sections before getting to the rewrite",
+        "long conclusions after a practical script"
+      ]
+    },
+    "shortlist_roundup": {
+      "label": "Shortlist roundup",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "avoid",
+      "introStyle": "Open like a curated shortlist, not like a category encyclopedia.",
+      "sectionCountGuidance": "Use 3 to 5 sections. Let a table or comparison block do part of the work instead of writing everything as prose.",
+      "faqPolicy": "FAQ is usually unnecessary; only add it if the category raises obvious recurring questions.",
+      "closingStyle": "Close with who should act now, what to shortlist, or what to skip.",
+      "sectionPatterns": [
+        "which opportunities stand out right now",
+        "what separates the stronger fits from the noisy listings",
+        "who benefits most from this mix",
+        "what to shortlist first"
+      ],
+      "avoid": [
+        "listing every opportunity with equal depth",
+        "forced FAQ at the end of a roundup"
+      ]
+    },
+    "deal_spotlight_analysis": {
+      "label": "Deal spotlight analysis",
+      "minSections": 3,
+      "maxSections": 4,
+      "faqMode": "avoid",
+      "introStyle": "Begin with why this one campaign deserves a closer look or extra caution.",
+      "sectionCountGuidance": "Use 3 to 4 sections with one clearly dominant analysis section, then move into fit, friction, and next step.",
+      "faqPolicy": "FAQ is usually unnecessary unless the deal type raises a very specific repeated concern.",
+      "closingStyle": "End with a creator-side verdict: who should apply, who should wait, and what to clarify first.",
+      "sectionPatterns": [
+        "what makes this deal stand out",
+        "what the workload and payout really mean",
+        "who should apply and who should pass",
+        "what to clarify before moving"
+      ],
+      "avoid": [
+        "turning the article into a generic category post",
+        "padding the article with unrelated background"
+      ]
+    },
+    "creator_fit_breakdown": {
+      "label": "Creator fit breakdown",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "optional",
+      "introStyle": "Open from the creator-fit question, not from a generic brand overview.",
+      "sectionCountGuidance": "Use 3 to 5 sections and give extra weight to fit, workload, and audience-trust tradeoffs.",
+      "faqPolicy": "FAQ is optional; add it only if the fit decision leaves clear unanswered questions.",
+      "closingStyle": "Close with who this is more likely to suit and what would make it a pass.",
+      "sectionPatterns": [
+        "what this brand, niche, or campaign tends to signal",
+        "where fit shows up beyond payout",
+        "where trust or execution can break down",
+        "how to decide whether to move forward"
+      ],
+      "avoid": [
+        "generic brand summary",
+        "review language with no creator-side judgment"
+      ]
+    },
+    "mistakes_and_fix": {
+      "label": "Mistakes and fix",
+      "minSections": 3,
+      "maxSections": 5,
+      "faqMode": "optional",
+      "introStyle": "Open with the pattern creators keep running into, not with a broad lesson statement.",
+      "sectionCountGuidance": "Use 3 to 5 sections with strong contrast between the mistake and the better move.",
+      "faqPolicy": "FAQ is optional and should only appear if it deepens the fix.",
+      "closingStyle": "Finish with the smallest next fix that changes the pattern.",
+      "sectionPatterns": [
+        "the pattern that keeps going wrong",
+        "why it happens",
+        "what the better move looks like",
+        "how to prevent the same mistake next time"
+      ],
+      "avoid": [
+        "moralizing tone",
+        "repeating the same warning in every section"
+      ]
+    },
+    "timely_implications": {
+      "label": "Timely implications",
+      "minSections": 3,
+      "maxSections": 4,
+      "faqMode": "avoid",
+      "introStyle": "Start with what changed and why it matters for creator decision-making right now.",
+      "sectionCountGuidance": "Use 3 to 4 focused sections and move quickly from context to implications to action.",
+      "faqPolicy": "FAQ is rarely needed unless the update triggers specific practical questions.",
+      "closingStyle": "End with the immediate action creators should take now, not a generic future-looking summary.",
+      "sectionPatterns": [
+        "what changed",
+        "why it matters in creator workflow terms",
+        "what this affects first",
+        "what to do next"
+      ],
+      "avoid": [
+        "news recap structure",
+        "too much background at the expense of action"
+      ]
+    }
+  }
+}

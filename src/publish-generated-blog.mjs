@@ -6,7 +6,7 @@ import OSS from "ali-oss";
 import { google } from "googleapis";
 
 const DEFAULT_AI_BASE_URL = "https://yunwu.ai";
-const DEFAULT_TEXT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_TEXT_MODEL = "gemini-3.1-pro-preview";
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_OSS_ENDPOINT = "oss-ap-southeast-1.aliyuncs.com";
 const DEFAULT_OSS_BUCKET = "lgi-static";
@@ -942,6 +942,8 @@ async function repairJsonPayload({ rawText, apiKey, baseUrl, model }) {
     '  "seoDescription": "string",',
     '  "tags": ["array of lowercase strings"],',
     '  "imagePrompt": "string",',
+    '  "experienceModules": [{"type":"string","title":"string","intro":"string","bullets":["string"],"table":{"columns":["string"],"rows":[["string"]]},"script":"string"}],',
+    '  "contentBlocks": [{"type":"string","title":"string","intro":"string","items":["string"],"body":"string","table":{"columns":["string"],"rows":[["string"]]},"visualPrompt":"string","visualCaption":"string"}],',
     '  "markdown": "string"',
     "}",
     "Malformed input:",
@@ -1287,6 +1289,357 @@ function inferPreferredHeadlineStyles(candidate, headlineRules) {
   const templateStyles = headlineRules?.templateStyleMap?.[candidate.templateType] || [];
   const lifecycleStyles = headlineRules?.lifecycleStyleMap?.[candidate.lifecycleStage || inferLifecycleStage(candidate)] || [];
   return uniqueStrings([...templateStyles, ...lifecycleStyles]).slice(0, 4);
+}
+
+function inferPreferredExperienceModules(candidate, experienceRules) {
+  const templateModules = experienceRules?.templateModuleMap?.[candidate.templateType] || [];
+  const lifecycleModules = experienceRules?.lifecycleModuleMap?.[candidate.lifecycleStage || inferLifecycleStage(candidate)] || [];
+  return uniqueStrings([...templateModules, ...lifecycleModules])
+    .slice(0, Number(experienceRules?.maxModulesPerArticle || 2));
+}
+
+function buildExperienceModuleGuidance(candidate, experienceRules) {
+  const preferredModules = inferPreferredExperienceModules(candidate, experienceRules);
+  if (!preferredModules.length) return "";
+
+  const descriptions = preferredModules
+    .map((moduleType) => {
+      const moduleDefinition = experienceRules?.moduleTypes?.[moduleType];
+      if (!moduleDefinition) return "";
+      return `${moduleType}: ${moduleDefinition.description}`;
+    })
+    .filter(Boolean);
+
+  return [
+    `Preferred experience modules: ${preferredModules.join(", ")}.`,
+    descriptions.length ? `Module guidance: ${descriptions.join(" | ")}` : "",
+    `Use illustrative, plausible creator workflow detail. ${experienceRules?.disclaimer || ""}`,
+    ...(experienceRules?.plausibilityRules || []).map((rule) => `- ${rule}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildSyntheticRealismGuidance(candidate, syntheticRealismRules) {
+  const lines = [];
+  const normalizedPlatform = String(candidate.platform || candidate.seedTopic || "")
+    .toLowerCase();
+  const platformKey = ["youtube", "tiktok", "instagram"].find((item) => normalizedPlatform.includes(item));
+  const platformRanges = platformKey
+    ? syntheticRealismRules?.platformRanges?.[platformKey]
+    : null;
+
+  if (platformKey && platformRanges) {
+    lines.push(
+      `${toSentenceCase(platformKey)} realism ranges: production time ${platformRanges.productionHours}; likely CTR ${platformRanges.ctr}; likely conversion ${platformRanges.conversion}.`,
+    );
+  }
+
+  const followerText = String(candidate.followerTier || candidate.audience || "").toLowerCase();
+  if (/\bmicro\b/.test(followerText)) {
+    lines.push(`Micro creator range: ${syntheticRealismRules?.followerTiers?.micro || "10k to 50k followers"}.`);
+  } else if (/\bmid\b/.test(followerText)) {
+    lines.push(`Mid creator range: ${syntheticRealismRules?.followerTiers?.mid || "50k to 250k followers"}.`);
+  }
+
+  const candidateText = buildCandidateText(candidate);
+  if (candidateText.includes("gifted") || candidateText.includes("free product")) {
+    lines.push(syntheticRealismRules?.scenarioRules?.gifted_only || "");
+  }
+  if (candidateText.includes("affiliate")) {
+    lines.push(syntheticRealismRules?.scenarioRules?.affiliate_only || "");
+  }
+  if (candidateText.includes("usage rights") || candidateText.includes("whitelist")) {
+    lines.push(syntheticRealismRules?.scenarioRules?.usage_rights || "");
+  }
+  if (candidateText.includes("exclusivity")) {
+    lines.push(syntheticRealismRules?.scenarioRules?.exclusivity || "");
+  }
+
+  return [
+    "Synthetic realism guidance:",
+    ...lines.filter(Boolean),
+    ...(syntheticRealismRules?.voiceRules || []).map((rule) => `- ${rule}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function sanitizeExperienceModules(rawModules, experienceRules) {
+  const supportedTypes = new Set(Object.keys(experienceRules?.moduleTypes || {}));
+  const modules = Array.isArray(rawModules) ? rawModules : [];
+
+  return modules
+    .map((module) => ({
+      type: String(module?.type || "").trim(),
+      title: String(module?.title || "").trim(),
+      intro: String(module?.intro || "").trim(),
+      bullets: Array.isArray(module?.bullets)
+        ? module.bullets.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 6)
+        : [],
+      script: String(module?.script || "").trim(),
+      table: module?.table && Array.isArray(module.table.columns) && Array.isArray(module.table.rows)
+        ? {
+            columns: module.table.columns.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4),
+            rows: module.table.rows
+              .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell || "").trim()) : []))
+              .filter((row) => row.length)
+              .slice(0, 5),
+          }
+        : null,
+    }))
+    .filter((module) => supportedTypes.has(module.type) && module.title)
+    .slice(0, Number(experienceRules?.maxModulesPerArticle || 2));
+}
+
+function renderMarkdownTable(table) {
+  if (!table?.columns?.length || !table?.rows?.length) return "";
+  const columnCount = table.columns.length;
+  const normalizedRows = table.rows
+    .map((row) => {
+      const trimmedRow = row.slice(0, columnCount);
+      while (trimmedRow.length < columnCount) {
+        trimmedRow.push("");
+      }
+      return trimmedRow;
+    })
+    .filter((row) => row.some((cell) => cell));
+  if (!normalizedRows.length) return "";
+
+  const header = `| ${table.columns.join(" | ")} |`;
+  const divider = `| ${table.columns.map(() => "---").join(" | ")} |`;
+  const rows = normalizedRows.map((row) => `| ${row.join(" | ")} |`);
+  return [header, divider, ...rows].join("\n");
+}
+
+function renderExperienceModulesMarkdown(modules, experienceRules) {
+  const normalized = sanitizeExperienceModules(modules, experienceRules);
+  if (!normalized.length) return "";
+
+  const sections = [];
+  for (const module of normalized) {
+    const label = experienceRules?.moduleTypes?.[module.type]?.label || toSentenceCase(module.type.replace(/_/g, " "));
+    const defaultIntro = experienceRules?.introLabels?.[module.type] || "";
+    const lines = [`## ${module.title || label}`, ""];
+    lines.push(`> ${module.intro || defaultIntro}`.trim());
+
+    if (module.bullets?.length) {
+      lines.push("");
+      lines.push(...module.bullets.map((item) => `- ${item}`));
+    }
+
+    if (module.table) {
+      const tableMarkdown = renderMarkdownTable(module.table);
+      if (tableMarkdown) {
+        lines.push("");
+        lines.push(tableMarkdown);
+      }
+    }
+
+    if (module.script) {
+      lines.push("");
+      lines.push("```text");
+      lines.push(module.script);
+      lines.push("```");
+    }
+
+    sections.push(lines.filter(Boolean).join("\n"));
+  }
+
+  const disclaimer = experienceRules?.disclaimer
+    ? `> ${experienceRules.disclaimer}`
+    : "";
+  return [disclaimer, ...sections].filter(Boolean).join("\n\n");
+}
+
+function inferPreferredContentBlockTypes(candidate, contentBlockRules) {
+  const templateBlocks = contentBlockRules?.templateBlockMap?.[candidate.templateType] || [];
+  const lifecycleBlocks = contentBlockRules?.lifecycleBlockMap?.[candidate.lifecycleStage || inferLifecycleStage(candidate)] || [];
+  return uniqueStrings([...templateBlocks, ...lifecycleBlocks])
+    .slice(0, Number(contentBlockRules?.maxBlocksPerArticle || 3));
+}
+
+function buildContentBlockGuidance(candidate, contentBlockRules) {
+  const preferredBlocks = inferPreferredContentBlockTypes(candidate, contentBlockRules);
+  if (!preferredBlocks.length) return "";
+
+  const descriptions = preferredBlocks
+    .map((blockType) => {
+      const blockDefinition = contentBlockRules?.blockTypes?.[blockType];
+      if (!blockDefinition) return "";
+      return `${blockType}: ${blockDefinition.description}`;
+    })
+    .filter(Boolean);
+
+  return [
+    `Preferred rich content blocks: ${preferredBlocks.join(", ")}.`,
+    descriptions.length ? `Block guidance: ${descriptions.join(" | ")}` : "",
+    "Only add blocks when they clearly improve usefulness. Do not add decorative filler blocks.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function resolveStructureProfile(candidate, templateProfile, structureRules) {
+  const lifecycleStage = candidate.lifecycleStage || inferLifecycleStage(candidate);
+  const templateKey = structureRules?.templateProfileMap?.[candidate.templateType] || "";
+  const lifecycleKey = structureRules?.lifecycleProfileMap?.[lifecycleStage] || "";
+  const intentKey = structureRules?.intentProfileMap?.[candidate.intentType] || "";
+  const layerKey = structureRules?.layerProfileMap?.[candidate.layer] || "";
+  const selectedKey = templateKey
+    || lifecycleKey
+    || intentKey
+    || layerKey
+    || structureRules?.defaultProfile
+    || "editorial_analysis";
+  const profile = structureRules?.profiles?.[selectedKey] || {};
+  const influences = uniqueStrings(
+    [
+      templateKey ? `template -> ${templateKey}` : "",
+      lifecycleKey ? `lifecycle -> ${lifecycleKey}` : "",
+      intentKey ? `intent -> ${intentKey}` : "",
+      layerKey ? `layer -> ${layerKey}` : "",
+    ].filter(Boolean),
+  );
+
+  return {
+    key: selectedKey,
+    profile,
+    influences,
+    lifecycleStage,
+    templateGoals: templateProfile?.sectionGoals || [],
+  };
+}
+
+function buildStructureGuidance(candidate, templateProfile, structureRules) {
+  const resolved = resolveStructureProfile(candidate, templateProfile, structureRules);
+  const profile = resolved.profile || {};
+  const lines = [
+    `Selected structure profile: ${profile.label || toSentenceCase(resolved.key.replace(/_/g, " "))}.`,
+    profile.introStyle ? `Intro guidance: ${profile.introStyle}` : "",
+    profile.sectionCountGuidance ? `Section guidance: ${profile.sectionCountGuidance}` : "",
+    profile.faqPolicy ? `FAQ guidance: ${profile.faqPolicy}` : "",
+    profile.closingStyle ? `Closing guidance: ${profile.closingStyle}` : "",
+    profile.sectionPatterns?.length
+      ? `Preferred section patterns: ${profile.sectionPatterns.join("; ")}.`
+      : "",
+    resolved.templateGoals?.length
+      ? `Template goals to cover naturally: ${resolved.templateGoals.join("; ")}.`
+      : "",
+    resolved.influences?.length
+      ? `Structure influences: ${resolved.influences.join(" | ")}.`
+      : "",
+    profile.avoid?.length
+      ? `Structure patterns to avoid: ${profile.avoid.join("; ")}.`
+      : "",
+    "Do not default to a generic blog outline with evenly weighted sections unless this structure genuinely calls for it.",
+  ];
+
+  return {
+    ...resolved,
+    guidance: lines.filter(Boolean).join("\n"),
+  };
+}
+
+function sanitizeContentBlocks(rawBlocks, contentBlockRules) {
+  const supportedTypes = new Set(Object.keys(contentBlockRules?.blockTypes || {}));
+  const blocks = Array.isArray(rawBlocks) ? rawBlocks : [];
+
+  return blocks
+    .map((block) => ({
+      type: String(block?.type || "").trim(),
+      title: String(block?.title || "").trim(),
+      intro: String(block?.intro || "").trim(),
+      items: Array.isArray(block?.items)
+        ? block.items.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8)
+        : [],
+      body: String(block?.body || "").trim(),
+      table: block?.table && Array.isArray(block.table.columns) && Array.isArray(block.table.rows)
+        ? {
+            columns: block.table.columns.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 5),
+            rows: block.table.rows
+              .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell || "").trim()) : []))
+              .filter((row) => row.length)
+              .slice(0, 6),
+          }
+        : null,
+      visualPrompt: String(block?.visualPrompt || "").trim(),
+      visualCaption: String(block?.visualCaption || "").trim(),
+    }))
+    .filter((block) => supportedTypes.has(block.type) && block.title)
+    .slice(0, Number(contentBlockRules?.maxBlocksPerArticle || 3));
+}
+
+function sortContentBlocksForRender(blocks, contentBlockRules) {
+  const order = contentBlockRules?.renderOrder || [];
+  return [...blocks].sort((left, right) => {
+    const leftIndex = order.indexOf(left.type);
+    const rightIndex = order.indexOf(right.type);
+    const normalizedLeft = leftIndex === -1 ? 999 : leftIndex;
+    const normalizedRight = rightIndex === -1 ? 999 : rightIndex;
+    return normalizedLeft - normalizedRight;
+  });
+}
+
+function renderContentBlocksMarkdown(blocks, contentBlockRules) {
+  const normalized = sanitizeContentBlocks(blocks, contentBlockRules);
+  if (!normalized.length) return "";
+
+  const sections = [];
+  const orderedBlocks = sortContentBlocksForRender(normalized, contentBlockRules);
+
+  for (const block of orderedBlocks) {
+    const lines = [`## ${block.title}`, ""];
+    if (block.intro) lines.push(block.intro);
+
+    if (block.type === "table" || block.type === "decision_grid") {
+      const tableMarkdown = renderMarkdownTable(block.table);
+      if (tableMarkdown) {
+        if (block.intro) lines.push("");
+        lines.push(tableMarkdown);
+      }
+      if (block.items?.length) {
+        lines.push("");
+        lines.push(...block.items.map((item) => `- ${item}`));
+      }
+    } else if (block.type === "checklist") {
+      if (block.items?.length) {
+        if (block.intro) lines.push("");
+        lines.push(...block.items.map((item) => `- [ ] ${item}`));
+      }
+    } else if (block.type === "callout") {
+      const calloutLines = [
+        block.body || block.intro,
+        ...block.items,
+      ].filter(Boolean);
+      if (calloutLines.length) {
+        lines.length = 0;
+        lines.push(`> **${block.title}**`);
+        for (const calloutLine of calloutLines) {
+          lines.push(`> ${calloutLine}`);
+        }
+      }
+    } else if (block.type === "visual_brief") {
+      lines.push("**Visual note**");
+      if (block.body) {
+        lines.push("");
+        lines.push(block.body);
+      }
+      if (block.visualPrompt) {
+        lines.push("");
+        lines.push(`- Suggested illustration angle: ${block.visualPrompt}`);
+      }
+      if (block.visualCaption) {
+        lines.push(`- Suggested caption: ${block.visualCaption}`);
+      }
+    }
+
+    if (lines.length > 1) {
+      sections.push(lines.join("\n"));
+    }
+  }
+
+  return sections.join("\n\n");
 }
 
 function deriveKeywordHints(candidate) {
@@ -1676,6 +2029,10 @@ async function loadV1ConfigBundle() {
     queryRules,
     scoringRules,
     headlineRules,
+    experienceRules,
+    contentBlockRules,
+    syntheticRealismRules,
+    structureRules,
     internalLinkingRules,
     toneRules,
     trendRules,
@@ -1689,6 +2046,10 @@ async function loadV1ConfigBundle() {
       loadJsonData("query-rules.json"),
       loadJsonData("scoring-rules.json"),
       loadJsonData("headline-rules.json"),
+      loadJsonData("experience-rules.json"),
+      loadJsonData("content-block-rules.json"),
+      loadJsonData("synthetic-realism-rules.json"),
+      loadJsonData("structure-rules.json"),
       loadJsonData("internal-linking-rules.json"),
       loadJsonData("tone-rules.json"),
       loadJsonData("trend-rules.json"),
@@ -1703,6 +2064,10 @@ async function loadV1ConfigBundle() {
     queryRules,
     scoringRules,
     headlineRules,
+    experienceRules,
+    contentBlockRules,
+    syntheticRealismRules,
+    structureRules,
     internalLinkingRules,
     toneRules,
     trendRules,
@@ -3975,6 +4340,183 @@ function appendMarkdownSections(markdown, sections) {
   return [String(markdown || "").trim(), ...normalizedSections].filter(Boolean).join("\n\n");
 }
 
+function splitMarkdownByH2(markdown) {
+  const text = String(markdown || "").trim();
+  if (!text) return [];
+
+  const lines = text.split("\n");
+  const sections = [];
+  let current = [];
+
+  for (const line of lines) {
+    if (/^##\s+/.test(line) && current.length) {
+      sections.push(current.join("\n").trim());
+      current = [line];
+      continue;
+    }
+    current.push(line);
+  }
+
+  if (current.length) {
+    sections.push(current.join("\n").trim());
+  }
+
+  return sections.filter(Boolean);
+}
+
+function joinMarkdownSections(sections) {
+  return sections.map((section) => String(section || "").trim()).filter(Boolean).join("\n\n");
+}
+
+function insertMarkdownAfterIntro(markdown, block) {
+  const normalizedBlock = String(block || "").trim();
+  if (!normalizedBlock) return String(markdown || "").trim();
+
+  const sections = splitMarkdownByH2(markdown);
+  if (!sections.length) {
+    return appendMarkdownSections(markdown, [normalizedBlock]);
+  }
+
+  const [intro, ...rest] = sections;
+  return joinMarkdownSections([intro, normalizedBlock, ...rest]);
+}
+
+function insertMarkdownBeforeFaq(markdown, block) {
+  const normalizedBlock = String(block || "").trim();
+  if (!normalizedBlock) return String(markdown || "").trim();
+
+  const sections = splitMarkdownByH2(markdown);
+  if (!sections.length) {
+    return appendMarkdownSections(markdown, [normalizedBlock]);
+  }
+
+  const faqIndex = sections.findIndex((section) => /^##\s+faq\b/i.test(section) || /^##\s+frequently asked questions\b/i.test(section));
+  if (faqIndex === -1) {
+    return appendMarkdownSections(markdown, [normalizedBlock]);
+  }
+
+  const nextSections = [...sections];
+  nextSections.splice(faqIndex, 0, normalizedBlock);
+  return joinMarkdownSections(nextSections);
+}
+
+function extractMarkdownHeadings(markdown) {
+  return String(markdown || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^#{1,6}\s+/.test(line))
+    .map((line) => {
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      return {
+        level: match?.[1]?.length || 0,
+        text: String(match?.[2] || "").trim(),
+      };
+    })
+    .filter((item) => item.level && item.text);
+}
+
+function countRepeatingStarterRatio(headings, qualityRules) {
+  const starterBuckets = {};
+  for (const heading of headings) {
+    const starter = String(heading.text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .split(/\s+/)
+      .filter(Boolean)[0];
+    if (!starter) continue;
+    starterBuckets[starter] = (starterBuckets[starter] || 0) + 1;
+  }
+
+  const allowedStarters = new Set(qualityRules?.repetitiveStarters || []);
+  const counts = Object.entries(starterBuckets)
+    .filter(([starter]) => allowedStarters.has(starter))
+    .map(([, count]) => count);
+  if (!counts.length || !headings.length) return 0;
+  return Math.max(...counts) / headings.length;
+}
+
+function auditStructureQuality(markdown, structureProfile, structureRules) {
+  const qualityRules = structureRules?.quality || {};
+  const profile = structureProfile?.profile || {};
+  const headings = extractMarkdownHeadings(markdown);
+  const h2Headings = headings.filter((item) => item.level === 2);
+  const sectionCount = h2Headings.length;
+  const hasFaq = h2Headings.some((item) => /^(faq|frequently asked questions)\b/i.test(item.text));
+  const genericPatterns = (qualityRules.genericHeadingPatterns || []).map((pattern) => new RegExp(pattern, "i"));
+  const genericHeadingCount = h2Headings.filter((item) =>
+    genericPatterns.some((pattern) => pattern.test(item.text))
+  ).length;
+  const shortHeadingCount = h2Headings.filter((item) => item.text.split(/\s+/).filter(Boolean).length <= 2).length;
+  const repeatedStarterRatio = countRepeatingStarterRatio(h2Headings, qualityRules);
+  const minSections = Number(profile.minSections || 3);
+  const maxSections = Number(profile.maxSections || 5);
+  const faqMode = String(profile.faqMode || "optional");
+  const findings = [];
+  let score = 0.72;
+
+  if (sectionCount < minSections) {
+    findings.push(`section_count_low:${sectionCount}`);
+    score -= Math.min(0.22, (minSections - sectionCount) * 0.08);
+  } else if (sectionCount > maxSections) {
+    findings.push(`section_count_high:${sectionCount}`);
+    score -= Math.min(0.22, (sectionCount - maxSections) * 0.06);
+  } else {
+    score += 0.08;
+  }
+
+  if (faqMode === "avoid" && hasFaq) {
+    findings.push("faq_discouraged");
+    score -= 0.16;
+  } else if (faqMode === "discourage" && hasFaq) {
+    findings.push("faq_overused");
+    score -= 0.1;
+  } else if (faqMode === "optional" && hasFaq) {
+    score += 0.01;
+  }
+
+  if (genericHeadingCount >= 2) {
+    findings.push(`generic_headings:${genericHeadingCount}`);
+    score -= Math.min(0.18, genericHeadingCount * 0.06);
+  }
+
+  if (shortHeadingCount >= Math.max(2, Math.ceil(sectionCount * 0.5))) {
+    findings.push(`headings_too_short:${shortHeadingCount}`);
+    score -= 0.08;
+  }
+
+  const maxRepeatedStarterRatio = Number(qualityRules.maxRepeatedStarterRatio || 0.67);
+  if (repeatedStarterRatio > maxRepeatedStarterRatio) {
+    findings.push(`repetitive_headings:${repeatedStarterRatio.toFixed(2)}`);
+    score -= 0.16;
+  } else if (repeatedStarterRatio <= 0.4 && sectionCount >= 3) {
+    score += 0.04;
+  }
+
+  if (!h2Headings.length) {
+    findings.push("missing_h2_structure");
+    score -= 0.25;
+  }
+
+  const introWords = getWordCount(splitMarkdownByH2(markdown)[0] || "");
+  if (introWords > 220) {
+    findings.push("intro_too_long");
+    score -= 0.07;
+  }
+
+  score = clamp(score);
+
+  return {
+    score,
+    findings,
+    sectionCount,
+    hasFaq,
+    genericHeadingCount,
+    repeatedStarterRatio,
+    needsRewrite: score < Number(qualityRules.rewriteThreshold || 0.63),
+    warnOnly: score < Number(qualityRules.warnThreshold || 0.75),
+  };
+}
+
 function getTemplateProfile(programmaticLibrary, candidate) {
   const templates = programmaticLibrary.templates || {};
   if (candidate.templateType && templates[candidate.templateType]) {
@@ -4095,6 +4637,10 @@ function buildDraftPrompt({
   templateProfile,
   toneRules,
   headlineRules,
+  experienceRules,
+  contentBlockRules,
+  syntheticRealismRules,
+  structureRules,
   recentHeadlineHistory,
 }) {
   const recentPosts = summarizeRecentPosts(manifest.posts || []);
@@ -4108,7 +4654,6 @@ function buildDraftPrompt({
     .filter(Boolean)
     .join("\n");
   const bannedPhrases = uniqueStrings(toneRules.bannedPhrases || []).slice(0, 12);
-  const templateGoals = templateProfile?.sectionGoals || [];
   const brandContext = candidate.brandName
     ? `Brand context: ${candidate.brandName} often appears in ${candidate.campaignStyle || "creator campaigns"} and tends to fit ${candidate.creatorFit?.join(", ") || "selected creator niches"}.`
     : "";
@@ -4175,6 +4720,10 @@ function buildDraftPrompt({
     .slice(0, Number(headlineRules?.recentWindow || 15))
     .map((entry) => entry.title)
     .filter(Boolean);
+  const experienceModuleContext = buildExperienceModuleGuidance(candidate, experienceRules);
+  const contentBlockContext = buildContentBlockGuidance(candidate, contentBlockRules);
+  const syntheticRealismContext = buildSyntheticRealismGuidance(candidate, syntheticRealismRules);
+  const structureProfile = buildStructureGuidance(candidate, templateProfile, structureRules);
 
   return [
     "You are writing a production blog post for the CollabGrow website.",
@@ -4194,12 +4743,15 @@ function buildDraftPrompt({
     '  "seoDescription": "string under 180 characters",',
     '  "tags": ["3 to 6 lowercase tags"],',
     '  "imagePrompt": "single paragraph for a 1200x630 cover image prompt that follows the visual direction below, with no text, no UI, and no watermark",',
+    '  "experienceModules": [{"type":"representative_scenario|decision_math|clause_breakdown|negotiation_script","title":"string","intro":"string","bullets":["3 to 6 concise bullets"],"table":{"columns":["col 1","col 2"],"rows":[["cell 1","cell 2"]]},"script":"optional plain-text script"}],',
+    '  "contentBlocks": [{"type":"table|checklist|decision_grid|callout|visual_brief","title":"string","intro":"string","items":["string"],"body":"string","table":{"columns":["col 1","col 2"],"rows":[["cell 1","cell 2"]]},"visualPrompt":"string","visualCaption":"string"}],',
     '  "markdown": "full markdown article between 1000 and 1500 words"',
     "}",
     "",
     "Article requirements:",
     "- Use one H1 as the article title, then H2/H3 sections.",
-    "- Include a short intro, 4 to 6 substantive sections, one FAQ section, and a clear closing takeaway.",
+    "- Follow the selected structure profile below rather than forcing every article into the same generic blog outline.",
+    "- Section lengths do not need to be equal. Let the most important judgment, workflow step, or comparison carry the most weight.",
     "- Do not include frontmatter.",
     "- Do not include citations, fake statistics, or references to made-up surveys.",
     "- Do not write generic influencer marketing advice; stay focused on creator sponsorship decisions, outreach review, brand vetting, and real workflows.",
@@ -4214,6 +4766,11 @@ function buildDraftPrompt({
     "- Keep important SEO language when it genuinely fits, but do not force every title into the same 'framework / vetting / qualification' structure.",
     "- Vary title structures across the candidates. Do not make every option start with 'How', 'What', or 'Why'.",
     "- H1 title can be more editorial and readable. SEO title should be slightly clearer and more search-friendly, but still natural.",
+    "- When useful, generate 1 or 2 experienceModules. These should feel like realistic, representative creator-side teaching examples, not audited client stories.",
+    "- Do not pretend you have private customer data. Use plausible scenarios, sample negotiation language, representative clauses, and simplified decision math instead.",
+    "- When useful, generate 1 to 3 contentBlocks. These should make the article easier to scan or apply, not just make it longer.",
+    "- Prefer tables, decision grids, and checklists when they make tradeoffs clearer.",
+    "- A visual_brief is only a text note for a possible future illustration. Do not assume an actual extra image will be rendered in this article.",
     "",
     `Selected layer: ${promptContext.layerLabel}`,
     `Creator workflow stage: ${promptContext.lifecycleStage}`,
@@ -4231,13 +4788,16 @@ function buildDraftPrompt({
     landingPageContext,
     trendContext,
     coverStyleContext,
+    experienceModuleContext,
+    contentBlockContext,
+    syntheticRealismContext,
+    structureProfile.guidance,
     headlineStyleDefinitions.length
       ? `Preferred headline styles for this article: ${headlineStyleDefinitions.join("; ")}.`
       : "",
     recentHeadlinePreview.length
       ? `Recent titles to avoid echoing too closely: ${JSON.stringify(recentHeadlinePreview)}`
       : "",
-    templateGoals.length ? `Template section goals: ${templateGoals.join("; ")}.` : "",
     productLine,
     "",
     `Avoid these phrases entirely: ${bannedPhrases.join("; ")}`,
@@ -4249,6 +4809,74 @@ function buildDraftPrompt({
     "Recent posts to avoid overlapping with:",
     JSON.stringify(recentPosts),
   ].filter(Boolean).join("\n");
+}
+
+async function rewriteMarkdownStructure({
+  markdown,
+  title,
+  candidate,
+  structureProfile,
+  toneRules,
+  apiKey,
+  baseUrl,
+  model,
+  findings,
+}) {
+  const rewritePrompt = [
+    "You are revising a production blog article to improve structure and reduce template-like repetition.",
+    "Return markdown only. Do not return JSON. Do not use markdown fences.",
+    "Keep the H1 title exactly the same.",
+    "Preserve the article's core topic, creator-side perspective, and useful points, but rewrite the structure so it feels less templated and more editorial.",
+    `Title: ${title}`,
+    `Seed topic: ${candidate.seedTopic}`,
+    `Layer: ${candidate.layer}`,
+    `Lifecycle stage: ${candidate.lifecycleStage || inferLifecycleStage(candidate)}`,
+    `Template type: ${candidate.templateType || candidate.sourceType || candidate.layer}`,
+    `Structure profile: ${structureProfile?.profile?.label || structureProfile?.key || "Editorial analysis"}`,
+    structureProfile?.guidance || "",
+    `Voice goals: ${(toneRules.voice?.goals || []).join("; ")}`,
+    `Patterns to avoid: ${(toneRules.avoidPatterns || []).join("; ")}`,
+    findings?.length
+      ? `Problems to fix in the current draft: ${findings.join("; ")}`
+      : "",
+    "Rewrite guidance:",
+    "- Do not default back to a generic 4-to-6 section template with a forced FAQ.",
+    "- Vary section emphasis and keep only the sections that genuinely help the reader move forward.",
+    "- If FAQ is weak or unnecessary, remove it.",
+    "- Improve section headings so they are specific, readable, and not repetitive.",
+    "- Keep the article between roughly 900 and 1500 words.",
+    "- Preserve markdown formatting and keep H2/H3 structure.",
+    "Current markdown:",
+    markdown,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  logStep("AI_TEXT", "Rewriting markdown structure for de-templating", {
+    model,
+    title,
+    findings,
+    structureProfileKey: structureProfile?.key || "",
+  });
+
+  const response = await callGeminiModel({
+    model,
+    apiKey,
+    baseUrl,
+    body: {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: rewritePrompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.55,
+      },
+    },
+  });
+
+  return getTextFromGeminiResponse(response);
 }
 
 async function generateBlogDraft({
@@ -4263,9 +4891,14 @@ async function generateBlogDraft({
   toneRules,
   templateProfile,
   headlineRules,
+  experienceRules,
+  contentBlockRules,
+  syntheticRealismRules,
+  structureRules,
   publishLog,
 }) {
   const promptContext = buildPromptContext(candidate, internalLinkingRules, queryRules);
+  const structureProfile = resolveStructureProfile(candidate, templateProfile, structureRules);
   const recentHeadlineHistory = collectRecentHeadlineHistory({
     manifest,
     publishLog,
@@ -4279,6 +4912,10 @@ async function generateBlogDraft({
     templateProfile,
     toneRules,
     headlineRules,
+    experienceRules,
+    contentBlockRules,
+    syntheticRealismRules,
+    structureRules,
     recentHeadlineHistory,
   });
 
@@ -4345,6 +4982,8 @@ async function generateBlogDraft({
   const seoDescription = String(parsed.seoDescription || description).trim();
   const imagePrompt = String(parsed.imagePrompt || "").trim();
   const mergedTags = sanitizeTags([...(parsed.tags || []), ...(candidate.tags || [])]);
+  const experienceModules = sanitizeExperienceModules(parsed.experienceModules, experienceRules);
+  const contentBlocks = sanitizeContentBlocks(parsed.contentBlocks, contentBlockRules);
   const keywordHints = deriveKeywordHints(candidate);
   const preferredHeadlineStyles = inferPreferredHeadlineStyles(candidate, headlineRules);
   const titleSelection = selectHeadlineFromCandidates({
@@ -4369,11 +5008,42 @@ async function generateBlogDraft({
   });
   const title = titleSelection.selected.title;
   const seoTitle = seoTitleSelection.selected.title;
-  const rawMarkdown = ensureMarkdownHasH1(String(parsed.markdown || "").trim(), title);
+  const initialMarkdown = ensureMarkdownHasH1(String(parsed.markdown || "").trim(), title);
 
-  if (!title || !description || !rawMarkdown || !imagePrompt) {
+  if (!title || !description || !initialMarkdown || !imagePrompt) {
     throw new Error("Generated article is missing one of: title, description, markdown, imagePrompt.");
   }
+
+  let rawMarkdown = initialMarkdown;
+  const initialStructureAudit = auditStructureQuality(rawMarkdown, structureProfile, structureRules);
+  if (initialStructureAudit.needsRewrite) {
+    const rewrittenMarkdownRaw = await rewriteMarkdownStructure({
+      markdown: rawMarkdown,
+      title,
+      candidate,
+      structureProfile: buildStructureGuidance(candidate, templateProfile, structureRules),
+      toneRules,
+      apiKey,
+      baseUrl,
+      model,
+      findings: initialStructureAudit.findings,
+    });
+    const rewrittenMarkdown = ensureMarkdownHasH1(String(rewrittenMarkdownRaw || "").trim(), title);
+    if (rewrittenMarkdown) {
+      const rewrittenAudit = auditStructureQuality(rewrittenMarkdown, structureProfile, structureRules);
+      logStep("AI_TEXT", "Structure rewrite audit comparison", {
+        before: initialStructureAudit,
+        after: rewrittenAudit,
+      });
+      if (rewrittenAudit.score >= initialStructureAudit.score) {
+        rawMarkdown = rewrittenMarkdown;
+      }
+    }
+  } else if (initialStructureAudit.warnOnly) {
+    logStep("AI_TEXT", "Structure audit flagged mild template risk", initialStructureAudit);
+  }
+
+  const finalStructureAudit = auditStructureQuality(rawMarkdown, structureProfile, structureRules);
 
   if (getWordCount(rawMarkdown) < 800) {
     throw new Error("Generated markdown is too short for publishing.");
@@ -4385,6 +5055,8 @@ async function generateBlogDraft({
     seoTitle,
     tags: mergedTags,
     wordCount: getWordCount(rawMarkdown),
+    structureProfileKey: structureProfile.key,
+    structureQualityScore: finalStructureAudit.score,
   });
 
   return {
@@ -4401,7 +5073,12 @@ async function generateBlogDraft({
     }),
     markdown: rawMarkdown,
     tags: mergedTags,
+    experienceModules,
+    contentBlocks,
     promptContext,
+    structureProfileKey: structureProfile.key,
+    structureQualityScore: finalStructureAudit.score,
+    structureQualityFindings: finalStructureAudit.findings,
     titleStyle: titleSelection.selected.style,
     seoTitleStyle: seoTitleSelection.selected.style,
     titleCandidates: titleSelection.ranked,
@@ -4467,6 +5144,8 @@ function enrichMarkdown({
   internalLinkingRules,
   scoringRules,
   toneRules,
+  experienceRules,
+  contentBlockRules,
   score,
 }) {
   const ctaStyle = selectCtaStyle({
@@ -4495,8 +5174,22 @@ function enrichMarkdown({
     internalLinkingRules,
   );
   const liveOpportunities = buildLiveOpportunitiesMarkdown(candidate);
-
-  const markdown = appendMarkdownSections(draft.markdown, [
+  const richContentBlocks = renderContentBlocksMarkdown(
+    draft.contentBlocks,
+    contentBlockRules,
+  );
+  const experienceModules = renderExperienceModulesMarkdown(
+    draft.experienceModules,
+    experienceRules,
+  );
+  let markdown = draft.markdown;
+  if (richContentBlocks) {
+    markdown = insertMarkdownAfterIntro(markdown, richContentBlocks);
+  }
+  if (experienceModules) {
+    markdown = insertMarkdownBeforeFaq(markdown, experienceModules);
+  }
+  markdown = appendMarkdownSections(markdown, [
     toolSection,
     landingPageSupport,
     liveOpportunities,
@@ -4534,6 +5227,9 @@ function buildPublishLogEntry({
     score,
     keywordGroup: candidate.keywordGroup || "",
     templateType: candidate.templateType || "",
+    structureProfileKey: draft.structureProfileKey || "",
+    structureQualityScore: Number(draft.structureQualityScore || 0),
+    structureQualityFindings: draft.structureQualityFindings || [],
     titleStyle: draft.titleStyle || "",
     seoTitleStyle: draft.seoTitleStyle || "",
     tags: draft.tags,
@@ -4561,6 +5257,8 @@ function buildTopicLedgerEntry({
       topic: candidate.seedTopic,
       primaryProduct: candidate.primaryProduct,
       templateType: candidate.templateType || "",
+      structureProfileKey: candidate.structureProfileKey || "",
+      structureQualityScore: Number(candidate.structureQualityScore || 0),
       sourceType: candidate.sourceType || "library",
       score: candidate.score || 0,
       ctaStyle,
@@ -4793,6 +5491,10 @@ async function main() {
       toneRules: configBundle.toneRules,
       templateProfile,
       headlineRules: configBundle.headlineRules,
+      experienceRules: configBundle.experienceRules,
+      contentBlockRules: configBundle.contentBlockRules,
+      syntheticRealismRules: configBundle.syntheticRealismRules,
+      structureRules: configBundle.structureRules,
       publishLog,
     });
     runState.title = draft.title;
@@ -4849,6 +5551,8 @@ async function main() {
       internalLinkingRules: configBundle.internalLinkingRules,
       scoringRules: configBundle.scoringRules,
       toneRules: configBundle.toneRules,
+      experienceRules: configBundle.experienceRules,
+      contentBlockRules: configBundle.contentBlockRules,
       score: candidate.score || 1,
     });
     runState.ctaStyle = enriched.ctaStyle;
@@ -4887,6 +5591,8 @@ async function main() {
       total: mergedPosts.length,
       posts: mergedPosts,
     };
+    candidate.structureProfileKey = draft.structureProfileKey || "";
+    candidate.structureQualityScore = Number(draft.structureQualityScore || 0);
     const publishLogEntry = buildPublishLogEntry({
       slug,
       draft,
