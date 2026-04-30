@@ -23,6 +23,11 @@ on:
         description: "Optional batch preset (use landing_support_top10 to publish the 10 landing support articles)"
         required: false
         type: string
+      enable_dingtalk:
+        description: Send DingTalk notification for this manual run
+        required: false
+        default: true
+        type: boolean
       dry_run:
         description: Generate and validate without uploading to OSS
         required: false
@@ -87,8 +92,21 @@ jobs:
           BLOG_PRODUCT_OVERRIDE: ${{ inputs.product }}
           BLOG_BATCH_PRESET: ${{ inputs.batch_preset }}
           BLOG_DRY_RUN: ${{ inputs.dry_run }}
+          BLOG_ENABLE_DINGTALK_INPUT: ${{ inputs.enable_dingtalk }}
+          BLOG_DINGTALK_WEBHOOK_DEFAULT: ${{ secrets.BLOG_DINGTALK_WEBHOOK }}
+          BLOG_DINGTALK_SECRET_DEFAULT: ${{ secrets.BLOG_DINGTALK_SECRET }}
         run: |
           set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ "${BLOG_ENABLE_DINGTALK_INPUT:-true}" != "true" ]; then
+            export BLOG_DINGTALK_WEBHOOK=""
+            export BLOG_DINGTALK_SECRET=""
+            echo "DingTalk notification: disabled for this manual run"
+          else
+            export BLOG_DINGTALK_WEBHOOK="${BLOG_DINGTALK_WEBHOOK_DEFAULT:-}"
+            export BLOG_DINGTALK_SECRET="${BLOG_DINGTALK_SECRET_DEFAULT:-}"
+            echo "DingTalk notification: enabled"
+          fi
 
           if [ "${BLOG_DRY_RUN:-false}" = "true" ]; then
             SCRIPT_NAME="blog:publish:dry-run"
