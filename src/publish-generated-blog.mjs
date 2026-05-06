@@ -5083,6 +5083,8 @@ async function generateBlogDraft({
   syntheticRealismRules,
   structureRules,
   publishLog,
+  externalLinksWhitelist,
+  keywordTargets,
 }) {
   const promptContext = buildPromptContext(candidate, internalLinkingRules, queryRules);
   const structureProfile = resolveStructureProfile(candidate, templateProfile, structureRules);
@@ -5104,8 +5106,8 @@ async function generateBlogDraft({
     syntheticRealismRules,
     structureRules,
     recentHeadlineHistory,
-    externalLinksWhitelist: configBundle.externalLinksWhitelist,
-    keywordTargets: configBundle.keywordTargets,
+    externalLinksWhitelist,
+    keywordTargets,
   });
 
   logStep("AI_TEXT", "Generating blog draft", {
@@ -5691,6 +5693,8 @@ async function main() {
       syntheticRealismRules: configBundle.syntheticRealismRules,
       structureRules: configBundle.structureRules,
       publishLog,
+      externalLinksWhitelist: configBundle.externalLinksWhitelist,
+      keywordTargets: configBundle.keywordTargets,
     });
     runState.title = draft.title;
     runState.wordCount = getWordCount(draft.markdown);
