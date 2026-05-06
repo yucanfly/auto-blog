@@ -53,17 +53,17 @@
     "qualifying ": { "softCap": 2 }
   },
   "h1ScoreWeights": {
-    "naturalness": 0.28,
-    "novelty": 0.2,
-    "styleFit": 0.2,
-    "seoFit": 0.18,
+    "naturalness": 0.22,
+    "novelty": 0.16,
+    "styleFit": 0.16,
+    "seoFit": 0.32,
     "voiceFit": 0.14
   },
   "seoTitleScoreWeights": {
-    "naturalness": 0.18,
-    "novelty": 0.12,
-    "styleFit": 0.12,
-    "seoFit": 0.4,
-    "voiceFit": 0.18
+    "naturalness": 0.16,
+    "novelty": 0.10,
+    "styleFit": 0.10,
+    "seoFit": 0.48,
+    "voiceFit": 0.16
   }
 }

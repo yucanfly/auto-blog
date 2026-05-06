@@ -6,7 +6,7 @@ import OSS from "ali-oss";
 import { google } from "googleapis";
 
 const DEFAULT_AI_BASE_URL = "https://yunwu.ai";
-const DEFAULT_TEXT_MODEL = "gemini-3.1-pro-preview";
+const DEFAULT_TEXT_MODEL = "claude-opus-4-6";
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_OSS_ENDPOINT = "oss-ap-southeast-1.aliyuncs.com";
 const DEFAULT_OSS_BUCKET = "lgi-static";
@@ -951,25 +951,14 @@ async function repairJsonPayload({ rawText, apiKey, baseUrl, model }) {
   ].join("\n");
 
   logStep("AI_TEXT", "Repairing malformed JSON payload from model output");
-  const response = await callGeminiModel({
+  return await callTextModel({
     model,
     apiKey,
     baseUrl,
-    body: {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: repairPrompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json",
-      },
-    },
+    prompt: repairPrompt,
+    temperature: 0.2,
+    jsonMode: true,
   });
-
-  return getTextFromGeminiResponse(response);
 }
 
 async function callGeminiModel({ model, apiKey, baseUrl, body }) {
@@ -1024,6 +1013,87 @@ function getInlineImageFromGeminiResponse(payload) {
     data: String(inlineData.data || ""),
     mimeType: String(inlineData.mimeType || inlineData.mime_type || "image/png"),
   };
+}
+
+async function callClaudeModel({ apiKey, baseUrl, body }) {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/v1/messages`;
+
+  logStep("AI", "Calling Claude model", {
+    model: body?.model,
+    baseUrl: normalizeBaseUrl(baseUrl),
+  });
+
+  const response = await fetch(requestUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `Claude request failed (${response.status} ${response.statusText}): ${errorText.slice(0, 500)}`,
+    );
+  }
+
+  logStep("AI", "Claude response received", {
+    model: body?.model,
+    status: response.status,
+  });
+
+  return response.json();
+}
+
+function getTextFromClaudeResponse(payload) {
+  const blocks = payload?.content || [];
+  return blocks
+    .filter((block) => block?.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+}
+
+function isClaudeModel(model) {
+  return String(model || "").toLowerCase().startsWith("claude-");
+}
+
+async function callTextModel({ model, apiKey, baseUrl, prompt, temperature, jsonMode, maxTokens, thinking }) {
+  if (isClaudeModel(model)) {
+    const body = {
+      model,
+      max_tokens: Number(maxTokens) || 16000,
+      messages: [{ role: "user", content: prompt }],
+    };
+    if (thinking) {
+      body.thinking = { type: "adaptive" };
+    }
+    // Opus 4.7 rejects temperature/top_p/top_k; Opus 4.6 accepts them
+    const isOpus47 = /opus-4-7/i.test(model);
+    if (typeof temperature === "number" && !isOpus47) {
+      body.temperature = temperature;
+    }
+    const response = await callClaudeModel({ apiKey, baseUrl, body });
+    return getTextFromClaudeResponse(response);
+  }
+
+  const generationConfig = {};
+  if (typeof temperature === "number") generationConfig.temperature = temperature;
+  if (jsonMode) generationConfig.responseMimeType = "application/json";
+
+  const response = await callGeminiModel({
+    model,
+    apiKey,
+    baseUrl,
+    body: {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
+    },
+  });
+  return getTextFromGeminiResponse(response);
 }
 
 async function fetchJson(url, options = {}) {
@@ -1887,6 +1957,7 @@ function buildBlogDocument({
   draft,
   dateString,
   imageUrl,
+  imageAlt,
   title,
   description,
   seoTitle,
@@ -1896,6 +1967,7 @@ function buildBlogDocument({
   author,
   targetLandingPages,
   contentCluster,
+  faq,
 }) {
   return {
     slug,
@@ -1904,6 +1976,7 @@ function buildBlogDocument({
     date: dateString,
     updatedAt: dateString,
     image: imageUrl,
+    imageAlt: String(imageAlt || "").trim() || undefined,
     author,
     tags,
     category: "blog",
@@ -1915,7 +1988,51 @@ function buildBlogDocument({
       description: seoDescription,
       image: imageUrl,
     },
+    faq: sanitizeFaqItems(faq),
     markdown,
+  };
+}
+
+function sanitizeFaqItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => ({
+      question: String(item?.question || "").trim(),
+      answer: String(item?.answer || "").trim(),
+    }))
+    .filter((item) => item.question && item.answer)
+    .slice(0, 8);
+}
+
+function pickAuthor({ authors, candidate, manifest, fallbackAvatar }) {
+  const fallback = {
+    name: DEFAULT_AUTHOR_NAME,
+    avatar: fallbackAvatar,
+  };
+  if (!authors?.authors) return fallback;
+
+  const cluster = candidate.cluster || "";
+  const candidateAuthors = Object.entries(authors.authors).filter(([, profile]) =>
+    (profile.expertiseClusters || []).includes(cluster),
+  );
+
+  const pool = candidateAuthors.length ? candidateAuthors : Object.entries(authors.authors);
+  if (!pool.length) return fallback;
+
+  const recentAuthorNames = (manifest.posts || [])
+    .slice(0, 5)
+    .map((post) => post.author?.name || "")
+    .filter(Boolean);
+
+  const freshPool = pool.filter(([, profile]) => !recentAuthorNames.includes(profile.name));
+  const chosen = (freshPool.length ? freshPool : pool)[0];
+  const [, profile] = chosen;
+
+  return {
+    name: profile.name,
+    avatar: profile.avatar || fallbackAvatar,
+    bio: profile.bio || undefined,
+    linkedin: profile.linkedin || undefined,
   };
 }
 
@@ -1927,6 +2044,7 @@ function buildBlogSummary(documentUrl, postDocument) {
     date: postDocument.date,
     updatedAt: postDocument.updatedAt,
     image: postDocument.image,
+    imageAlt: postDocument.imageAlt,
     documentUrl,
     author: postDocument.author,
     tags: postDocument.tags,
@@ -1935,6 +2053,7 @@ function buildBlogSummary(documentUrl, postDocument) {
     targetLandingPages: postDocument.targetLandingPages,
     contentCluster: postDocument.contentCluster,
     seo: postDocument.seo,
+    faq: postDocument.faq,
   };
 }
 
@@ -2038,6 +2157,9 @@ async function loadV1ConfigBundle() {
     trendRules,
     dealBoardRules,
     dealCategoryMap,
+    externalLinksWhitelist,
+    keywordTargets,
+    authors,
   ] =
     await Promise.all([
       loadJsonData("topic-library.json"),
@@ -2055,6 +2177,9 @@ async function loadV1ConfigBundle() {
       loadJsonData("trend-rules.json"),
       loadJsonData("deal-board-rules.json"),
       loadJsonData("deal-category-map.json"),
+      loadJsonData("external-links-whitelist.json"),
+      loadJsonData("keyword-targets.json"),
+      loadJsonData("authors.json"),
     ]);
 
   return {
@@ -2073,6 +2198,9 @@ async function loadV1ConfigBundle() {
     trendRules,
     dealBoardRules,
     dealCategoryMap,
+    externalLinksWhitelist,
+    keywordTargets,
+    authors,
   };
 }
 
@@ -4322,17 +4450,19 @@ function buildRelatedReadingMarkdown({ manifest, candidate, siteBaseUrl, current
   ];
 
   for (const post of relatedPosts) {
-    const href = baseUrl ? `${baseUrl}/blog/${post.slug}` : `/blog/${post.slug}`;
-    lines.push(`- [${post.title}](${href})`);
+    lines.push(`- [${post.title}](/blog/${post.slug})`);
   }
 
   return lines.join("\n");
 }
 
-function ensureMarkdownHasH1(markdown, title) {
+function stripMarkdownH1(markdown) {
   const trimmed = String(markdown || "").trim();
-  if (/^#\s+/m.test(trimmed)) return trimmed;
-  return `# ${title}\n\n${trimmed}`;
+  return trimmed.replace(/^#\s+[^\n]*\n*/m, "").trim();
+}
+
+function ensureMarkdownHasH1(markdown, title) {
+  return stripMarkdownH1(markdown);
 }
 
 function appendMarkdownSections(markdown, sections) {
@@ -4597,6 +4727,64 @@ function composeCoverImagePrompt({ candidate, promptContext, styleProfile, model
   ].filter(Boolean).join("\n");
 }
 
+function buildExternalLinksContext(candidate, externalLinksWhitelist) {
+  if (!externalLinksWhitelist?.clusters) return "";
+  const cluster = candidate.cluster || "";
+  const links = externalLinksWhitelist.clusters[cluster];
+  if (!links?.length) return "";
+  const formatted = links.map((link) => `- [${link.label}](${link.url}) — ${link.context}`).join("\n");
+  return [
+    "Optional supporting references (use AT MOST one, only if a specific industry statistic or platform policy genuinely needs sourcing — otherwise do not include any external link):",
+    formatted,
+  ].join("\n");
+}
+
+function buildKeywordTargetContext(candidate, keywordTargets) {
+  if (!keywordTargets) return "";
+  const topicOverride = keywordTargets.topicKeywordOverrides?.[candidate.id];
+  const clusterKeywords = keywordTargets.clusterKeywords?.[candidate.cluster];
+  if (topicOverride) {
+    const lines = [
+      `TARGET KEYWORD (must appear in title): "${topicOverride.primary}"`,
+      `Secondary keywords (use 2+ in H2 headings): ${topicOverride.secondary.map((k) => `"${k}"`).join(", ")}`,
+    ];
+    return lines.join("\n");
+  }
+  if (clusterKeywords) {
+    const primary = clusterKeywords.primary?.[0] || "";
+    const secondary = (clusterKeywords.secondary || []).slice(0, 3);
+    const lines = [
+      primary ? `TARGET KEYWORD (must appear in title): "${primary}"` : "",
+      secondary.length ? `Secondary keywords (use 2+ in H2 headings): ${secondary.map((k) => `"${k}"`).join(", ")}` : "",
+    ];
+    return lines.filter(Boolean).join("\n");
+  }
+  return "";
+}
+
+function classifySearchIntent(candidate) {
+  const intentType = String(candidate.intentType || "").toLowerCase();
+  const cluster = String(candidate.cluster || "").toLowerCase();
+
+  // Commercial investigation: comparing options before deciding
+  if (["review", "comparison", "scenario", "fit"].includes(intentType)) {
+    return "commercial-investigation — readers are comparing options or evaluating fit before committing. Lead with judgment and tradeoffs.";
+  }
+  // Transactional: actively trying to take an action
+  if (["template", "checklist", "workflow", "framework"].includes(intentType)) {
+    return "transactional — readers want to act now. Provide actionable steps, scripts, or checklists they can use immediately.";
+  }
+  // Informational with high decision stakes
+  if (["red-flags", "mistakes", "trend"].includes(intentType)) {
+    return "informational-high-stakes — readers need to understand risks or changes that affect their decisions. Lead with what they could lose or miss.";
+  }
+  // Default informational
+  if (cluster.includes("risk-detection")) {
+    return "informational-high-stakes — readers want to identify and avoid harm. Lead with concrete warning signals.";
+  }
+  return "informational-decision — readers want to understand a concept well enough to act on it. Balance explanation with practical decision criteria.";
+}
+
 function buildPromptContext(candidate, internalLinkingRules, queryRules) {
   const product = PRODUCT_CONTEXT[candidate.primaryProduct] || PRODUCT_CONTEXT.deal_hunter;
   const productLinks = internalLinkingRules.products || {};
@@ -4642,6 +4830,8 @@ function buildDraftPrompt({
   syntheticRealismRules,
   structureRules,
   recentHeadlineHistory,
+  externalLinksWhitelist,
+  keywordTargets,
 }) {
   const recentPosts = summarizeRecentPosts(manifest.posts || []);
   const productLine = [
@@ -4743,32 +4933,37 @@ function buildDraftPrompt({
     '  "seoDescription": "string under 180 characters",',
     '  "tags": ["3 to 6 lowercase tags"],',
     '  "imagePrompt": "single paragraph for a 1200x630 cover image prompt that follows the visual direction below, with no text, no UI, and no watermark",',
+    '  "imageAlt": "string under 125 characters describing the visual content of the cover image, including the target keyword naturally for SEO",',
     '  "experienceModules": [{"type":"representative_scenario|decision_math|clause_breakdown|negotiation_script","title":"string","intro":"string","bullets":["3 to 6 concise bullets"],"table":{"columns":["col 1","col 2"],"rows":[["cell 1","cell 2"]]},"script":"optional plain-text script"}],',
     '  "contentBlocks": [{"type":"table|checklist|decision_grid|callout|visual_brief","title":"string","intro":"string","items":["string"],"body":"string","table":{"columns":["col 1","col 2"],"rows":[["cell 1","cell 2"]]},"visualPrompt":"string","visualCaption":"string"}],',
-    '  "markdown": "full markdown article between 1000 and 1500 words"',
+    '  "faq": [{"question":"string","answer":"string"}]',
+    `  "markdown": "full markdown article between ${structureProfile?.profile?.wordCountRange?.[0] || 1800} and ${structureProfile?.profile?.wordCountRange?.[1] || 2500} words"`,
     "}",
     "",
     "Article requirements:",
-    "- Use one H1 as the article title, then H2/H3 sections.",
+    "- Do NOT include an H1 heading in the markdown. The H1 is rendered separately by the frontend from the title field. Start the markdown directly with H2 sections.",
     "- Follow the selected structure profile below rather than forcing every article into the same generic blog outline.",
     "- Section lengths do not need to be equal. Let the most important judgment, workflow step, or comparison carry the most weight.",
     "- Do not include frontmatter.",
     "- Do not include citations, fake statistics, or references to made-up surveys.",
     "- Do not write generic influencer marketing advice; stay focused on creator sponsorship decisions, outreach review, brand vetting, and real workflows.",
     "- Mention CollabGrow only once or twice and naturally. The product should feel like a tool that supports the workflow, not the subject of the article.",
-    "- Do not include external links. Internal tool links will be added later.",
+    "- External links are OPTIONAL. Default to NO external links. Only include at most one link from the pre-approved list below if a specific industry statistic or platform policy genuinely needs sourcing. Never invent URLs. Never link to government, political, or news organization websites. Internal tool links will be added later.",
     "- Avoid these old or low-value directions unless directly necessary: generic influencer marketing software, social media growth hacks, all-in-one creator dashboards, broad CRM positioning.",
     "- Keep the prose natural. Do not sound like a template, a sales page, or an SEO content farm article.",
     "- Prefer specific decision criteria, tradeoffs, and examples over motivational filler.",
     "- Use short paragraphs and varied sentence length.",
     "- The imagePrompt should match the cover style guidance below rather than defaulting to the same generic workspace image every time.",
+    "- The imageAlt must describe what is visually shown in the cover image (objects, scene, mood). Include the target keyword naturally. Do NOT just repeat the article title — that has no SEO value.",
     "- The final title should sound like an experienced editor wrote it, not like an internal topic seed or SEO template.",
     "- Keep important SEO language when it genuinely fits, but do not force every title into the same 'framework / vetting / qualification' structure.",
     "- Vary title structures across the candidates. Do not make every option start with 'How', 'What', or 'Why'.",
     "- H1 title can be more editorial and readable. SEO title should be slightly clearer and more search-friendly, but still natural.",
+    "- CRITICAL: The SEO title and H1 title MUST target the same core search query and topic. They may differ in phrasing style, but must be semantically aligned — same subject, same intent, same target keyword. Never allow the SEO title to drift to a different topic than the H1.",
     "- When useful, generate 1 or 2 experienceModules. These should feel like realistic, representative creator-side teaching examples, not audited client stories.",
     "- Do not pretend you have private customer data. Use plausible scenarios, sample negotiation language, representative clauses, and simplified decision math instead.",
     "- When useful, generate 1 to 3 contentBlocks. These should make the article easier to scan or apply, not just make it longer.",
+    "- Generate 3-5 FAQ items in the faq array when the structure profile recommends or allows it. Each question should target a real long-tail search query that creators would type into Google. Answers should be 2-3 sentences, direct and actionable. Do NOT duplicate content already in the main article body. The faq array is separate from the markdown — do not include FAQ headings in the markdown itself.",
     "- Prefer tables, decision grids, and checklists when they make tradeoffs clearer.",
     "- A visual_brief is only a text note for a possible future illustration. Do not assume an actual extra image will be rendered in this article.",
     "",
@@ -4777,6 +4972,7 @@ function buildDraftPrompt({
     `Template type: ${templateProfile?.briefLabel || promptContext.templateType}`,
     `Audience: ${promptContext.audience}`,
     `Cluster: ${promptContext.cluster}`,
+    `Search intent: ${classifySearchIntent(candidate)}`,
     `Core topic: ${candidate.seedTopic}`,
     `Primary angle: ${candidate.angle}`,
     `Primary product to support naturally: ${promptContext.primaryProductName}`,
@@ -4799,6 +4995,8 @@ function buildDraftPrompt({
       ? `Recent titles to avoid echoing too closely: ${JSON.stringify(recentHeadlinePreview)}`
       : "",
     productLine,
+    buildExternalLinksContext(candidate, externalLinksWhitelist),
+    buildKeywordTargetContext(candidate, keywordTargets),
     "",
     `Avoid these phrases entirely: ${bannedPhrases.join("; ")}`,
     `Voice goals: ${(toneRules.voice?.goals || []).join("; ")}`,
@@ -4825,7 +5023,7 @@ async function rewriteMarkdownStructure({
   const rewritePrompt = [
     "You are revising a production blog article to improve structure and reduce template-like repetition.",
     "Return markdown only. Do not return JSON. Do not use markdown fences.",
-    "Keep the H1 title exactly the same.",
+    "Do NOT include an H1 heading in the markdown. The H1 is rendered separately by the frontend. Start with H2 sections.",
     "Preserve the article's core topic, creator-side perspective, and useful points, but rewrite the structure so it feels less templated and more editorial.",
     `Title: ${title}`,
     `Seed topic: ${candidate.seedTopic}`,
@@ -4844,7 +5042,7 @@ async function rewriteMarkdownStructure({
     "- Vary section emphasis and keep only the sections that genuinely help the reader move forward.",
     "- If FAQ is weak or unnecessary, remove it.",
     "- Improve section headings so they are specific, readable, and not repetitive.",
-    "- Keep the article between roughly 900 and 1500 words.",
+    "- Keep the article between roughly 1500 and 2500 words. Do not shorten below 1500.",
     "- Preserve markdown formatting and keep H2/H3 structure.",
     "Current markdown:",
     markdown,
@@ -4859,24 +5057,13 @@ async function rewriteMarkdownStructure({
     structureProfileKey: structureProfile?.key || "",
   });
 
-  const response = await callGeminiModel({
+  return await callTextModel({
     model,
     apiKey,
     baseUrl,
-    body: {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: rewritePrompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.55,
-      },
-    },
+    prompt: rewritePrompt,
+    temperature: 0.55,
   });
-
-  return getTextFromGeminiResponse(response);
 }
 
 async function generateBlogDraft({
@@ -4917,6 +5104,8 @@ async function generateBlogDraft({
     syntheticRealismRules,
     structureRules,
     recentHeadlineHistory,
+    externalLinksWhitelist: configBundle.externalLinksWhitelist,
+    keywordTargets: configBundle.keywordTargets,
   });
 
   logStep("AI_TEXT", "Generating blog draft", {
@@ -4927,25 +5116,15 @@ async function generateBlogDraft({
     existingPosts: manifest.posts?.length || 0,
   });
 
-  const response = await callGeminiModel({
+  const rawText = await callTextModel({
     model,
     apiKey,
     baseUrl,
-    body: {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.85,
-        responseMimeType: "application/json",
-      },
-    },
+    prompt,
+    temperature: 0.85,
+    jsonMode: true,
+    thinking: true,
   });
-
-  const rawText = getTextFromGeminiResponse(response);
   let parsed;
 
   try {
@@ -4981,9 +5160,11 @@ async function generateBlogDraft({
   const fallbackSeoTitle = String(parsed.seoTitle || fallbackTitle).trim();
   const seoDescription = String(parsed.seoDescription || description).trim();
   const imagePrompt = String(parsed.imagePrompt || "").trim();
+  const imageAlt = String(parsed.imageAlt || "").trim();
   const mergedTags = sanitizeTags([...(parsed.tags || []), ...(candidate.tags || [])]);
   const experienceModules = sanitizeExperienceModules(parsed.experienceModules, experienceRules);
   const contentBlocks = sanitizeContentBlocks(parsed.contentBlocks, contentBlockRules);
+  const faq = sanitizeFaqItems(parsed.faq);
   const keywordHints = deriveKeywordHints(candidate);
   const preferredHeadlineStyles = inferPreferredHeadlineStyles(candidate, headlineRules);
   const titleSelection = selectHeadlineFromCandidates({
@@ -5007,7 +5188,19 @@ async function generateBlogDraft({
     mode: "seo",
   });
   const title = titleSelection.selected.title;
-  const seoTitle = seoTitleSelection.selected.title;
+  let seoTitle = seoTitleSelection.selected.title;
+
+  // Semantic alignment guard: seoTitle must share meaningful overlap with H1 title
+  const titleSeoOverlap = overlapRatio(title, seoTitle);
+  if (titleSeoOverlap < 0.25) {
+    logStep("AI_TEXT", "SEO title misaligned with H1, falling back to H1-based title", {
+      h1: title,
+      seoTitle,
+      overlap: titleSeoOverlap,
+    });
+    seoTitle = title;
+  }
+
   const initialMarkdown = ensureMarkdownHasH1(String(parsed.markdown || "").trim(), title);
 
   if (!title || !description || !initialMarkdown || !imagePrompt) {
@@ -5045,7 +5238,7 @@ async function generateBlogDraft({
 
   const finalStructureAudit = auditStructureQuality(rawMarkdown, structureProfile, structureRules);
 
-  if (getWordCount(rawMarkdown) < 800) {
+  if (getWordCount(rawMarkdown) < 1200) {
     throw new Error("Generated markdown is too short for publishing.");
   }
 
@@ -5065,6 +5258,7 @@ async function generateBlogDraft({
     seoTitle,
     seoDescription,
     imagePrompt,
+    imageAlt,
     finalImagePrompt: composeCoverImagePrompt({
       candidate,
       promptContext,
@@ -5075,6 +5269,7 @@ async function generateBlogDraft({
     tags: mergedTags,
     experienceModules,
     contentBlocks,
+    faq,
     promptContext,
     structureProfileKey: structureProfile.key,
     structureQualityScore: finalStructureAudit.score,
@@ -5514,13 +5709,15 @@ async function main() {
       layer: candidate.layer,
     });
 
-    const author = {
-      name: DEFAULT_AUTHOR_NAME,
-      avatar:
+    const author = pickAuthor({
+      authors: configBundle.authors,
+      candidate,
+      manifest,
+      fallbackAvatar:
         String(
           manifest.posts?.find((post) => post.author?.avatar)?.author?.avatar || DEFAULT_AUTHOR_AVATAR,
         ).trim() || DEFAULT_AUTHOR_AVATAR,
-    };
+    });
 
     stepTracker.start("AI_IMAGE");
     const imageAsset = await generateCoverImage({
@@ -5569,6 +5766,7 @@ async function main() {
       draft: false,
       dateString: date,
       imageUrl,
+      imageAlt: draft.imageAlt,
       title: draft.title,
       description: draft.description,
       seoTitle: draft.seoTitle,
@@ -5578,6 +5776,7 @@ async function main() {
       author,
       targetLandingPages: candidate.targetLandingPages || [],
       contentCluster: candidate.cluster || "",
+      faq: draft.faq,
     });
 
     const postSummary = buildBlogSummary(documentUrl, postDocument);

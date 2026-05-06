@@ -1,0 +1,28 @@
+{
+  "description": "Named author profiles for blog post attribution. Cycle through these to improve E-E-A-T signals over generic 'CollabGrow Team' attribution.",
+  "rotationStrategy": "cluster",
+  "defaultAuthor": "ava-chen",
+  "authors": {
+    "ava-chen": {
+      "name": "Ava Chen",
+      "bio": "Creator partnerships specialist with 7+ years working with mid-tier influencers across TikTok, YouTube, and Instagram. Focuses on deal qualification and contract review.",
+      "avatar": "https://lgi-static.oss-ap-southeast-1.aliyuncs.com/blog/authors/ava-chen.png",
+      "linkedin": "",
+      "expertiseClusters": ["deal-qualification", "operations"]
+    },
+    "marcus-okafor": {
+      "name": "Marcus Okafor",
+      "bio": "Former brand-side influencer marketing lead turned creator advocate. Writes about brand vetting, scam patterns, and the legal side of sponsorship deals.",
+      "avatar": "https://lgi-static.oss-ap-southeast-1.aliyuncs.com/blog/authors/marcus-okafor.png",
+      "linkedin": "",
+      "expertiseClusters": ["risk-detection"]
+    },
+    "priya-shah": {
+      "name": "Priya Shah",
+      "bio": "Talent manager working with niche creators in beauty, lifestyle, and UGC. Covers platform-specific deal strategy and creator-fit evaluation.",
+      "avatar": "https://lgi-static.oss-ap-southeast-1.aliyuncs.com/blog/authors/priya-shah.png",
+      "linkedin": "",
+      "expertiseClusters": ["platform-strategy", "operations"]
+    }
+  }
+}

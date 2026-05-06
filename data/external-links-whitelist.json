@@ -1,0 +1,48 @@
+{
+  "description": "Pre-approved external authority links by content cluster. All URLs are verified live (HTTP 200). Used as optional supporting references in articles, NOT injected into every article. Only commercial industry sources — no government / political domains.",
+  "lastVerifiedAt": "2026-05-06",
+  "usagePolicy": "optional",
+  "clusters": {
+    "deal-qualification": [
+      {
+        "url": "https://influencermarketinghub.com/influencer-marketing-statistics/",
+        "label": "Influencer Marketing Hub Statistics",
+        "context": "industry benchmarks for rates, engagement, and campaign performance"
+      },
+      {
+        "url": "https://creatoreconomy.so/",
+        "label": "Creator Economy Newsletter",
+        "context": "creator economy trends, deal data, and platform updates"
+      }
+    ],
+    "operations": [
+      {
+        "url": "https://influencermarketinghub.com/influencer-rates/",
+        "label": "Influencer Rate Benchmarks",
+        "context": "industry rate data for negotiating sponsorship pricing"
+      }
+    ],
+    "platform-strategy": [
+      {
+        "url": "https://newsroom.tiktok.com/",
+        "label": "TikTok Newsroom",
+        "context": "official TikTok platform updates, policy changes, and creator program announcements"
+      },
+      {
+        "url": "https://blog.youtube/",
+        "label": "YouTube Official Blog",
+        "context": "official YouTube announcements on monetization, policies, and creator tools"
+      },
+      {
+        "url": "https://about.instagram.com/blog",
+        "label": "Instagram Blog",
+        "context": "official Instagram product updates and creator feature releases"
+      },
+      {
+        "url": "https://creators.instagram.com/",
+        "label": "Instagram for Creators",
+        "context": "Instagram's official resource hub for creator monetization and tools"
+      }
+    ]
+  }
+}

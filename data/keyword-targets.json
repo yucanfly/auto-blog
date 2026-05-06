@@ -1,0 +1,53 @@
+{
+  "description": "Maps content clusters and topic IDs to validated target keywords that real users search for. These keywords MUST appear in the article title/H2 headings.",
+  "clusterKeywords": {
+    "risk-detection": {
+      "primary": ["brand deal scam", "fake brand deal", "fake sponsorship email"],
+      "secondary": ["brand deal red flags", "how to spot fake brand deals", "is this brand deal legit", "creator scam warning signs"],
+      "longTail": ["how to tell if sponsorship email is real", "fake brand collaboration email", "brand deal phishing", "influencer scam emails"]
+    },
+    "deal-qualification": {
+      "primary": ["brand deal worth it", "how to evaluate brand deals", "brand deal checklist"],
+      "secondary": ["creator sponsorship checklist", "is this collab worth it", "brand deal negotiation tips", "sponsorship offer evaluation"],
+      "longTail": ["how to know if a brand deal is good", "creator brand deal calculator", "should I accept this brand deal"]
+    },
+    "operations": {
+      "primary": ["creator contract terms", "brand deal deliverables", "sponsorship payment terms"],
+      "secondary": ["net 30 vs net 60 brand deals", "usage rights brand deal", "exclusivity clause creator", "brand deal revision limits"],
+      "longTail": ["how many revisions is normal for brand deals", "what to include in creator contract", "brand deal payment timeline"]
+    },
+    "platform-strategy": {
+      "primary": ["tiktok brand deals", "instagram brand deals", "youtube sponsorship"],
+      "secondary": ["ugc brand deals", "micro influencer brand deals", "creator brand deal platforms"],
+      "longTail": ["how to get brand deals on tiktok", "instagram collab posts requirements", "youtube sponsorship rates"]
+    }
+  },
+  "topicKeywordOverrides": {
+    "core-fake-brand-outreach": {
+      "primary": "fake brand deal email",
+      "secondary": ["brand deal scam", "fake sponsorship"],
+      "mustIncludeInTitle": true
+    },
+    "core-red-flags-sponsorship-contracts": {
+      "primary": "brand deal red flags",
+      "secondary": ["sponsorship contract warning signs", "creator contract risks"],
+      "mustIncludeInTitle": true
+    },
+    "core-qualify-sponsorship-emails": {
+      "primary": "how to evaluate sponsorship emails",
+      "secondary": ["sponsorship email checklist", "brand deal email reply"],
+      "mustIncludeInTitle": true
+    },
+    "core-deal-worth-it": {
+      "primary": "is this brand deal worth it",
+      "secondary": ["brand deal calculator", "evaluate brand collaboration"],
+      "mustIncludeInTitle": true
+    },
+    "tool-legit-or-scam-email": {
+      "primary": "is this brand deal email legit",
+      "secondary": ["fake sponsorship email checker", "brand deal scam check"],
+      "mustIncludeInTitle": true
+    }
+  },
+  "promptGuidance": "The target keyword MUST appear naturally in either the H1 title or the SEO title (preferably both). At least 2 secondary keywords should appear in H2 headings."
+}

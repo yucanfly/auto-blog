@@ -2,7 +2,7 @@
   "products": {
     "deal_hunter": {
       "label": "Deal Hunter",
-      "url": "https://collabgrow.lgi365.com/deal-hunter",
+      "url": "/deal-hunter",
       "purpose": "Curated creator job board with verified listings and web-hunted opportunities.",
       "softCtas": [
         "If you want to compare this framework against real opportunities, Deal Hunter is a practical next step.",
@@ -19,7 +19,7 @@
     },
     "email_decoder": {
       "label": "Email Decoder",
-      "url": "https://collabgrow.lgi365.com/tools/email-analyze",
+      "url": "/tools/email-analyze",
       "purpose": "Analyzes sponsorship emails, extracts deliverables, flags scams, and suggests next steps.",
       "softCtas": [
         "If you want a second pass on a real sponsorship email, Email Decoder can help surface the offer, risks, and missing details.",
@@ -36,7 +36,7 @@
     },
     "brand_analyze": {
       "label": "Brand Analyze",
-      "url": "https://collabgrow.lgi365.com/tools/brand-analyze",
+      "url": "/tools/brand-analyze",
       "purpose": "Checks brand legitimacy, risk, campaign style, trust signals, and creator fit.",
       "softCtas": [
         "If the brand still feels unclear, Brand Analyze can help you review legitimacy, campaign style, and risk before committing.",
@@ -57,52 +57,52 @@
   "landingPages": {
     "brand-deals-for-creators": {
       "label": "Brand Deals for Creators",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/brand-deals-for-creators",
+      "url": "/deal-hunter/brand-deals-for-creators",
       "description": "Broad creator deal discovery across niches, platforms, and payout structures."
     },
     "ugc-brand-deals": {
       "label": "UGC Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/ugc-brand-deals",
+      "url": "/deal-hunter/ugc-brand-deals",
       "description": "Live UGC-friendly opportunities focused on demos, reviews, and product-led briefs."
     },
     "tiktok-brand-deals": {
       "label": "TikTok Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/tiktok-brand-deals",
+      "url": "/deal-hunter/tiktok-brand-deals",
       "description": "Short-form creator opportunities built around TikTok-style content."
     },
     "instagram-brand-deals": {
       "label": "Instagram Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/instagram-brand-deals",
+      "url": "/deal-hunter/instagram-brand-deals",
       "description": "Instagram-focused paid collabs, Reels briefs, and creator campaigns."
     },
     "youtube-brand-deals": {
       "label": "YouTube Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/youtube-brand-deals",
+      "url": "/deal-hunter/youtube-brand-deals",
       "description": "Long-form sponsorships, review briefs, and video creator opportunities."
     },
     "beauty-brand-deals": {
       "label": "Beauty Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/beauty-brand-deals",
+      "url": "/deal-hunter/beauty-brand-deals",
       "description": "Beauty and cosmetics deal discovery for creators comparing fit and workload."
     },
     "skincare-brand-deals": {
       "label": "Skincare Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/skincare-brand-deals",
+      "url": "/deal-hunter/skincare-brand-deals",
       "description": "Skincare campaigns where claims, testing, and content requirements matter."
     },
     "australia-paid-collabs": {
       "label": "Paid Collabs in Australia",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/australia-paid-collabs",
+      "url": "/deal-hunter/australia-paid-collabs",
       "description": "Region-fit opportunities for creators based in Australia."
     },
     "free-product-collabs": {
       "label": "Free Product Collabs",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/free-product-collabs",
+      "url": "/deal-hunter/free-product-collabs",
       "description": "Gifted collaborations and sample-driven opportunities for creators."
     },
     "micro-influencer-brand-deals": {
       "label": "Micro Influencer Brand Deals",
-      "url": "https://collabgrow.lgi365.com/deal-hunter/micro-influencer-brand-deals",
+      "url": "/deal-hunter/micro-influencer-brand-deals",
       "description": "Niche-fit sponsorship opportunities for smaller creator accounts."
     }
   },
