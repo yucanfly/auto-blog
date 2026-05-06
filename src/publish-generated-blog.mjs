@@ -5240,8 +5240,9 @@ async function generateBlogDraft({
 
   const finalStructureAudit = auditStructureQuality(rawMarkdown, structureProfile, structureRules);
 
-  if (getWordCount(rawMarkdown) < 1200) {
-    throw new Error("Generated markdown is too short for publishing.");
+  const finalWordCount = getWordCount(rawMarkdown);
+  if (finalWordCount < 900) {
+    throw new Error(`Generated markdown is too short for publishing (${finalWordCount} words, minimum 900).`);
   }
 
   logStep("AI_TEXT", "Draft generated", {

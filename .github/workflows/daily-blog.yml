@@ -48,7 +48,7 @@ jobs:
     env:
       TZ: Asia/Shanghai
       BLOG_AI_BASE_URL: https://yunwu.ai
-      BLOG_TEXT_MODEL: gemini-3.1-pro-preview
+      BLOG_TEXT_MODEL: claude-opus-4-6
       BLOG_IMAGE_MODEL: gemini-3.1-flash-image-preview
       BLOG_TIMEZONE: Asia/Shanghai
       BLOG_OSS_ENDPOINT: oss-ap-southeast-1.aliyuncs.com
