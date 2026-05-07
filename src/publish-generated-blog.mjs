@@ -977,6 +977,7 @@ async function callGeminiModel({ model, apiKey, baseUrl, body }) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
   });
 
   if (!response.ok) {
@@ -1031,6 +1032,7 @@ async function callClaudeModel({ apiKey, baseUrl, body }) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
   });
 
   if (!response.ok) {
